@@ -10,6 +10,13 @@ namespace ScheduledNwcExporter.Configuration
 {
     public class ModelExportJob : INotifyPropertyChanged
     {
+        private string _id = Guid.NewGuid().ToString();
+        public string Id
+        {
+            get => _id;
+            set { _id = value; OnPropertyChanged(); }
+        }
+
         private bool _isEnabled = true;
         public bool IsEnabled
         {
