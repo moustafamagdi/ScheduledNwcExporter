@@ -59,4 +59,36 @@ namespace ScheduledNwcExporter.UI.Views
             throw new NotSupportedException();
         }
     }
+
+    public class StatusToBackgroundConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        {
+            string status = value as string ?? string.Empty;
+
+            if (status == "Success")
+            {
+                // Darker shade of pale green for completed items
+                return new SolidColorBrush(Color.FromRgb(144, 238, 144)); // LightGreen
+            }
+
+            if (status != "Ready" && status != "Skipped" && status != "Cancelled" && status != "Failed")
+            {
+                // Active/Processing status - PaleGreen
+                return new SolidColorBrush(Color.FromRgb(152, 251, 152)); // PaleGreen
+            }
+
+            if (status == "Failed")
+            {
+                return new SolidColorBrush(Color.FromRgb(255, 235, 235)); // Very light red for failure
+            }
+
+            return Brushes.Transparent;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        {
+            throw new NotSupportedException();
+        }
+    }
 }

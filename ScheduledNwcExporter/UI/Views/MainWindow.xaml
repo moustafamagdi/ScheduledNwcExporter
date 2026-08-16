@@ -6,6 +6,7 @@
         WindowStartupLocation="CenterScreen" Background="#FFF5F5F5">
     <Window.Resources>
         <local:BoolToColorConverter x:Key="BoolToColorConverter" />
+        <local:StatusToBackgroundConverter x:Key="StatusToBackgroundConverter" />
     </Window.Resources>
 
     <Grid Margin="15">
@@ -52,6 +53,11 @@
                 </StackPanel>
 
                 <DataGrid Grid.Row="1" ItemsSource="{Binding Jobs}" SelectedItem="{Binding SelectedJob}" AutoGenerateColumns="False" CanUserAddRows="False" FontWeight="Normal" Background="White">
+                    <DataGrid.RowStyle>
+                        <Style TargetType="DataGridRow">
+                            <Setter Property="Background" Value="{Binding LastStatus, Converter={StaticResource StatusToBackgroundConverter}}" />
+                        </Style>
+                    </DataGrid.RowStyle>
                     <DataGrid.Columns>
                         <DataGridCheckBoxColumn Header="Enabled" Binding="{Binding IsEnabled}" Width="60"/>
                         <DataGridTextColumn Header="Source Model" Binding="{Binding SourceModelPath}" Width="310" IsReadOnly="True"/>
