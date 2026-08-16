@@ -39,28 +39,62 @@ namespace ScheduledNwcExporter.UI.Views
                 DataContext = _viewModel;
                 Closed += MainWindow_Closed;
 
-                // Enable single-click checkbox toggling on DataGrid
-                QueueDataGrid.PreviewMouseLeftButtonDown += (s, e) =>
+            // Enable single-click checkbox toggling on DataGrid
+            QueueDataGrid.PreviewMouseLeftButtonDown += (s, e) =>
+            {
+                var dep = (System.Windows.DependencyObject)e.OriginalSource;
+                while (dep != null && !(dep is System.Windows.Controls.DataGridCell) && !(dep is System.Windows.Controls.Primitives.DataGridColumnHeader))
                 {
-                    var dep = (System.Windows.DependencyObject)e.OriginalSource;
-                    while (dep != null && !(dep is System.Windows.Controls.DataGridCell) && !(dep is System.Windows.Controls.Primitives.DataGridColumnHeader))
-                    {
-                        dep = System.Windows.Media.VisualTreeHelper.GetParent(dep);
-                    }
+                    dep = System.Windows.Media.VisualTreeHelper.GetParent(dep);
+                }
 
-                    if (dep is System.Windows.Controls.DataGridCell cell && cell.Column is System.Windows.Controls.DataGridCheckBoxColumn)
+                if (dep is System.Windows.Controls.DataGridCell cell && cell.Column is System.Windows.Controls.DataGridCheckBoxColumn)
+                {
+                    if (cell.DataContext is ScheduledNwcExporter.Configuration.ModelExportJob job)
                     {
-                        if (!cell.IsEditing)
+                        bool newState = !job.IsEnabled;
+                        
+                        // Support bulk toggling if multiple rows are selected
+                        if (QueueDataGrid.SelectedItems.Count > 1 && QueueDataGrid.SelectedItems.Contains(job))
                         {
-                            cell.IsSelected = true;
-                            if (cell.DataContext is ScheduledNwcExporter.Configuration.ModelExportJob job)
+                            foreach (var item in QueueDataGrid.SelectedItems)
                             {
-                                job.IsEnabled = !job.IsEnabled;
-                                e.Handled = true;
+                                if (item is ScheduledNwcExporter.Configuration.ModelExportJob selectedJob)
+                                {
+                                    selectedJob.IsEnabled = newState;
+                                }
                             }
                         }
+                        else
+                        {
+                            job.IsEnabled = newState;
+                        }
+                        
+                        e.Handled = true;
                     }
-                };
+                }
+            };
+
+            // Support bulk toggling with Space key
+            QueueDataGrid.PreviewKeyDown += (s, e) =>
+            {
+                if (e.Key == System.Windows.Input.Key.Space && QueueDataGrid.SelectedItems.Count > 0)
+                {
+                    var firstJob = QueueDataGrid.SelectedItems[0] as ScheduledNwcExporter.Configuration.ModelExportJob;
+                    if (firstJob != null)
+                    {
+                        bool newState = !firstJob.IsEnabled;
+                        foreach (var item in QueueDataGrid.SelectedItems)
+                        {
+                            if (item is ScheduledNwcExporter.Configuration.ModelExportJob job)
+                            {
+                                job.IsEnabled = newState;
+                            }
+                        }
+                        e.Handled = true;
+                    }
+                }
+            };
             }
             catch (Exception ex)
             {
