@@ -21,44 +21,55 @@ namespace ScheduledNwcExporter.UI.Views
 
         public MainWindow()
         {
-            InitializeComponent();
-
-            var configurationManager = new ConfigurationManager();
-            var logger = new FileLogger
+            try
             {
-                DebugMode = configurationManager.CurrentSettings.DebugMode
-            };
+                InitializeComponent();
 
-            _exportQueueHandler = new ExportQueueExternalEventHandler(logger, configurationManager.CurrentSettings, Dispatcher);
-            _exportQueueEvent = ExternalEvent.Create(_exportQueueHandler);
-            _exportQueueHandler.AttachExternalEvent(_exportQueueEvent);
-
-            _viewModel = new MainViewModel(configurationManager, logger, _exportQueueHandler);
-            DataContext = _viewModel;
-            Closed += MainWindow_Closed;
-
-            // Enable single-click checkbox toggling on DataGrid
-            QueueDataGrid.PreviewMouseLeftButtonDown += (s, e) =>
-            {
-                var dep = (System.Windows.DependencyObject)e.OriginalSource;
-                while (dep != null && !(dep is System.Windows.Controls.DataGridCell) && !(dep is System.Windows.Controls.Primitives.DataGridColumnHeader))
+                var configurationManager = new ConfigurationManager();
+                var logger = new FileLogger
                 {
-                    dep = System.Windows.Media.VisualTreeHelper.GetParent(dep);
-                }
+                    DebugMode = configurationManager.CurrentSettings.DebugMode
+                };
 
-                if (dep is System.Windows.Controls.DataGridCell cell && cell.Column is System.Windows.Controls.DataGridCheckBoxColumn)
+                _exportQueueHandler = new ExportQueueExternalEventHandler(logger, configurationManager.CurrentSettings, Dispatcher);
+                _exportQueueEvent = ExternalEvent.Create(_exportQueueHandler);
+                _exportQueueHandler.AttachExternalEvent(_exportQueueEvent);
+
+                _viewModel = new MainViewModel(configurationManager, logger, _exportQueueHandler);
+                DataContext = _viewModel;
+                Closed += MainWindow_Closed;
+
+                // Enable single-click checkbox toggling on DataGrid
+                QueueDataGrid.PreviewMouseLeftButtonDown += (s, e) =>
                 {
-                    if (!cell.IsEditing)
+                    var dep = (System.Windows.DependencyObject)e.OriginalSource;
+                    while (dep != null && !(dep is System.Windows.Controls.DataGridCell) && !(dep is System.Windows.Controls.Primitives.DataGridColumnHeader))
                     {
-                        cell.IsSelected = true;
-                        if (cell.DataContext is ScheduledNwcExporter.Configuration.ModelExportJob job)
+                        dep = System.Windows.Media.VisualTreeHelper.GetParent(dep);
+                    }
+
+                    if (dep is System.Windows.Controls.DataGridCell cell && cell.Column is System.Windows.Controls.DataGridCheckBoxColumn)
+                    {
+                        if (!cell.IsEditing)
                         {
-                            job.IsEnabled = !job.IsEnabled;
-                            e.Handled = true;
+                            cell.IsSelected = true;
+                            if (cell.DataContext is ScheduledNwcExporter.Configuration.ModelExportJob job)
+                            {
+                                job.IsEnabled = !job.IsEnabled;
+                                e.Handled = true;
+                            }
                         }
                     }
-                }
-            };
+                };
+            }
+            catch (Exception ex)
+            {
+                FileLogger? fallbackLogger = null;
+                try { fallbackLogger = new FileLogger(); } catch { }
+                fallbackLogger?.Error("UI", $"Critical initialization failure: {ex.Message}", string.Empty, "Startup", ex);
+                Autodesk.Revit.UI.TaskDialog.Show("Hatco NWC Exporter", $"Critical startup error:\n{ex.Message}\n\nCheck logs under AppData\\Roaming\\MoustafaMagdi\\ScheduledNwcExporter\\logs");
+                throw;
+            }
         }
 
         private void MainWindow_Closed(object? sender, EventArgs e)
