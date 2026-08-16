@@ -73,7 +73,7 @@ namespace ScheduledNwcExporter.Queue
                 result.Skipped = true;
                 UpdateStatus("Skipped");
                 _logger.Info("Job", "Disabled job skipped.", modelName, "Preflight");
-                return CompleteJob(job, result, startedAt);
+                return CompleteJob(job, result, startedAt, UpdateStatus);
             }
 
             int maximumAttempts = Math.Max(1, job.RetryCount + 1);
@@ -167,10 +167,10 @@ namespace ScheduledNwcExporter.Queue
             }
 
             result.ErrorMessage = result.Succeeded || result.Cancelled ? result.ErrorMessage : lastError;
-            return CompleteJob(job, result, startedAt);
+            return CompleteJob(job, result, startedAt, UpdateStatus);
         }
 
-        private JobExecutionResult CompleteJob(ModelExportJob job, JobExecutionResult result, DateTime startedAt)
+        private JobExecutionResult CompleteJob(ModelExportJob job, JobExecutionResult result, DateTime startedAt, Action<string> updateStatus)
         {
             result.Duration = DateTime.Now - startedAt;
             job.LastRun = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
@@ -178,23 +178,23 @@ namespace ScheduledNwcExporter.Queue
 
             if (result.Succeeded)
             {
-                UpdateStatus("Success");
+                updateStatus("Success");
                 job.LastError = string.Empty;
                 _logger.Success("Job", $"Job completed in {job.LastDuration}.", result.ModelName, "Completed");
             }
             else if (result.Cancelled)
             {
-                UpdateStatus("Cancelled");
+                updateStatus("Cancelled");
                 job.LastError = result.ErrorMessage;
                 _logger.Warning("Job", "Job cancelled at a safe boundary.", result.ModelName, "Cancelled");
             }
             else if (result.Skipped)
             {
-                UpdateStatus("Skipped");
+                updateStatus("Skipped");
             }
             else
             {
-                UpdateStatus("Failed");
+                updateStatus("Failed");
                 job.LastError = result.ErrorMessage;
                 _logger.Error("Job", $"Job permanently failed. Reason: {result.ErrorMessage}", result.ModelName, "Failed");
             }
