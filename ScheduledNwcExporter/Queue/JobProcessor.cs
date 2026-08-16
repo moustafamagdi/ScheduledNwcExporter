@@ -53,7 +53,7 @@ namespace ScheduledNwcExporter.Queue
         /// Executes one export job, isolates failures, and always closes the programmatically opened document.
         /// This method must never be invoked through Task.Run, a timer callback, or another background thread.
         /// </summary>
-        public JobExecutionResult ProcessSingleJob(ModelExportJob job, Func<bool> isCancellationRequested)
+        public JobExecutionResult ProcessSingleJob(ModelExportJob job, Func<bool> isCancellationRequested, Action<string, string>? onProgress = null)
         {
             if (job == null) throw new ArgumentNullException(nameof(job));
             if (isCancellationRequested == null) throw new ArgumentNullException(nameof(isCancellationRequested));
@@ -62,10 +62,16 @@ namespace ScheduledNwcExporter.Queue
             DateTime startedAt = DateTime.Now;
             var result = new JobExecutionResult { ModelName = modelName };
 
+            void UpdateStatus(string status)
+            {
+                job.LastStatus = status;
+                onProgress?.Invoke(modelName, status);
+            }
+
             if (!job.IsEnabled)
             {
                 result.Skipped = true;
-                job.LastStatus = "Skipped";
+                UpdateStatus("Skipped");
                 _logger.Info("Job", "Disabled job skipped.", modelName, "Preflight");
                 return CompleteJob(job, result, startedAt);
             }
@@ -92,29 +98,29 @@ namespace ScheduledNwcExporter.Queue
                 PreparedModelSource? preparedModel = null;
                 try
                 {
-                    job.LastStatus = $"Attempt {attempt} - Validating";
+                    UpdateStatus($"Attempt {attempt} - Validating");
                     ValidateJobInputs(job);
 
-                    job.LastStatus = $"Attempt {attempt} - Preparing model";
+                    UpdateStatus($"Attempt {attempt} - Preparing model");
                     preparedModel = _temporaryModelCopyService.Prepare(
                         job.SourceModelPath,
                         _settings.Export.UseTemporaryCopyWithoutRevitLinks,
                         modelName);
 
-                    job.LastStatus = $"Attempt {attempt} - Opening model";
+                    UpdateStatus($"Attempt {attempt} - Opening model");
                     document = _documentManager.OpenModelDetached(_application, preparedModel.OpenPath);
                     if (document == null)
                     {
                         throw new InvalidOperationException("Revit could not open the source model as a detached document.");
                     }
 
-                    job.LastStatus = "Verifying worksets";
+                    UpdateStatus("Verifying worksets");
                     if (!_worksetManager.VerifyAllUserWorksetsOpen(document, modelName))
                     {
                         throw new InvalidOperationException("One or more required user worksets were closed after the document opened.");
                     }
 
-                    job.LastStatus = "Inspecting links";
+                    UpdateStatus("Inspecting links");
                     _linkManager.InspectAndLogRevitLinks(document, modelName);
 
                     if (isCancellationRequested())
@@ -125,10 +131,10 @@ namespace ScheduledNwcExporter.Queue
                         break;
                     }
 
-                    job.LastStatus = "Preparing export view";
+                    UpdateStatus("Preparing export view");
                     ElementId? exportViewId = _exportViewService.GetOrCreateExportView(document, modelName);
 
-                    job.LastStatus = "Exporting NWC";
+                    UpdateStatus("Exporting NWC");
                     string outputFileName = ResolveFilenameTemplate(job.OutputFileNameTemplate, modelName);
                     if (!_nwcExporter.ExportModelToNwc(document, job.OutputDirectory, outputFileName, _settings.Export, exportViewId, modelName))
                     {
@@ -152,7 +158,7 @@ namespace ScheduledNwcExporter.Queue
                 {
                     if (document != null)
                     {
-                        job.LastStatus = "Closing model";
+                        UpdateStatus("Closing model");
                         _documentManager.CloseDocumentSafely(document);
                     }
 
@@ -172,23 +178,23 @@ namespace ScheduledNwcExporter.Queue
 
             if (result.Succeeded)
             {
-                job.LastStatus = "Success";
+                UpdateStatus("Success");
                 job.LastError = string.Empty;
                 _logger.Success("Job", $"Job completed in {job.LastDuration}.", result.ModelName, "Completed");
             }
             else if (result.Cancelled)
             {
-                job.LastStatus = "Cancelled";
+                UpdateStatus("Cancelled");
                 job.LastError = result.ErrorMessage;
                 _logger.Warning("Job", "Job cancelled at a safe boundary.", result.ModelName, "Cancelled");
             }
             else if (result.Skipped)
             {
-                job.LastStatus = "Skipped";
+                UpdateStatus("Skipped");
             }
             else
             {
-                job.LastStatus = "Failed";
+                UpdateStatus("Failed");
                 job.LastError = result.ErrorMessage;
                 _logger.Error("Job", $"Job permanently failed. Reason: {result.ErrorMessage}", result.ModelName, "Failed");
             }

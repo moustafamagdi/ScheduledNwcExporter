@@ -182,7 +182,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
             }
         }
 
-        private string _currentActivityModel = "None";
+        private string _currentActivityModel = string.Empty;
         public string CurrentActivityModel
         {
             get => _currentActivityModel;
@@ -365,7 +365,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
 
         private void QueueHandler_ProgressChanged(object? sender, ExportSessionProgress progress)
         {
-            CurrentActivityModel = string.IsNullOrWhiteSpace(progress.ModelName) ? "None" : progress.ModelName;
+            CurrentActivityModel = progress.ModelName;
             CurrentActivityStage = progress.Stage;
             OverallProgressPercentage = progress.PercentComplete;
 

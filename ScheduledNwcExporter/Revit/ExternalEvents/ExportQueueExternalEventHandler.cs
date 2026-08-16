@@ -94,7 +94,10 @@ namespace ScheduledNwcExporter.Revit.ExternalEvents
             _summary.FailedModels.Clear();
 
             _logger.Info("Scheduler", $"Export session queued. Total models: {_summary.TotalModels}.");
-            PublishProgress(string.Empty, "Waiting for Revit to begin export processing.");
+            
+            string firstModelName = _jobs.Count > 0 ? System.IO.Path.GetFileName(_jobs[0].SourceModelPath) : string.Empty;
+            PublishProgress(firstModelName, "Waiting for Revit to become idle to begin processing…");
+            
             _externalEvent.Raise();
             return true;
         }
@@ -119,6 +122,11 @@ namespace ScheduledNwcExporter.Revit.ExternalEvents
 
             try
             {
+                // Immediately update UI to show we have entered the Revit API context
+                ModelExportJob currentJob = _jobs[_nextJobIndex];
+                string modelName = System.IO.Path.GetFileName(currentJob.SourceModelPath);
+                PublishProgress(modelName, $"Revit context acquired. Starting model {_nextJobIndex + 1} of {_jobs.Count}…");
+
                 if (!_exporterValidated)
                 {
                     var exporter = new NwcExporterService(_logger);
@@ -139,14 +147,10 @@ namespace ScheduledNwcExporter.Revit.ExternalEvents
                     return;
                 }
 
-                ModelExportJob currentJob = _jobs[_nextJobIndex];
-                string modelName = System.IO.Path.GetFileName(currentJob.SourceModelPath);
-                PublishProgress(modelName, $"Processing model {_nextJobIndex + 1} of {_jobs.Count}.");
-
                 // This is the critical boundary: the document open, workset inspection, link inspection,
                 // NWC export, and close all run inside IExternalEventHandler.Execute.
                 var processor = new JobProcessor(application.Application, _settings, _logger);
-                JobExecutionResult jobResult = processor.ProcessSingleJob(currentJob, () => _cancelRequested);
+                JobExecutionResult jobResult = processor.ProcessSingleJob(currentJob, () => _cancelRequested, PublishProgress);
 
                 if (jobResult.Succeeded)
                 {
@@ -202,13 +206,18 @@ namespace ScheduledNwcExporter.Revit.ExternalEvents
 
         private void PublishProgress(string modelName, string stage)
         {
-            ProgressChanged?.Invoke(this, new ExportSessionProgress
+            // Use BeginInvoke to ensure UI updates are dispatched to the UI thread
+            // and don't block the Revit execution thread.
+            _uiDispatcher.BeginInvoke(new Action(() =>
             {
-                CompletedJobs = _nextJobIndex,
-                TotalJobs = _jobs.Count,
-                ModelName = modelName,
-                Stage = stage
-            });
+                ProgressChanged?.Invoke(this, new ExportSessionProgress
+                {
+                    CompletedJobs = _nextJobIndex,
+                    TotalJobs = _jobs.Count,
+                    ModelName = modelName,
+                    Stage = stage
+                });
+            }));
         }
 
         private void CompleteSession()
