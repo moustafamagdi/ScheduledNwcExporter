@@ -1,7 +1,10 @@
 using System;
+using System.Linq;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Media;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using Autodesk.Revit.UI;
 using ScheduledNwcExporter.Configuration;
 using ScheduledNwcExporter.Logging;
@@ -18,6 +21,7 @@ namespace ScheduledNwcExporter.UI.Views
         private readonly ExternalEvent _exportQueueEvent;
         private readonly ExportQueueExternalEventHandler _exportQueueHandler;
         private readonly MainViewModel _viewModel;
+        private readonly ILogger _logger;
 
         public MainWindow()
         {
@@ -26,75 +30,24 @@ namespace ScheduledNwcExporter.UI.Views
                 InitializeComponent();
 
                 var configurationManager = new ConfigurationManager();
-                var logger = new FileLogger
+                _logger = new FileLogger
                 {
                     DebugMode = configurationManager.CurrentSettings.DebugMode
                 };
 
-                _exportQueueHandler = new ExportQueueExternalEventHandler(logger, configurationManager.CurrentSettings, Dispatcher);
+                // Attach a global exception handler for this window's dispatcher
+                this.Dispatcher.UnhandledException += Dispatcher_UnhandledException;
+
+                _exportQueueHandler = new ExportQueueExternalEventHandler(_logger, configurationManager.CurrentSettings, Dispatcher);
                 _exportQueueEvent = ExternalEvent.Create(_exportQueueHandler);
                 _exportQueueHandler.AttachExternalEvent(_exportQueueEvent);
 
-                _viewModel = new MainViewModel(configurationManager, logger, _exportQueueHandler);
+                _viewModel = new MainViewModel(configurationManager, _logger, _exportQueueHandler);
                 DataContext = _viewModel;
                 Closed += MainWindow_Closed;
 
-            // Enable single-click checkbox toggling on DataGrid
-            QueueDataGrid.PreviewMouseLeftButtonDown += (s, e) =>
-            {
-                var dep = (System.Windows.DependencyObject)e.OriginalSource;
-                while (dep != null && !(dep is System.Windows.Controls.DataGridCell) && !(dep is System.Windows.Controls.Primitives.DataGridColumnHeader))
-                {
-                    dep = System.Windows.Media.VisualTreeHelper.GetParent(dep);
-                }
-
-                if (dep is System.Windows.Controls.DataGridCell cell && cell.Column is System.Windows.Controls.DataGridCheckBoxColumn)
-                {
-                    if (cell.DataContext is ScheduledNwcExporter.Configuration.ModelExportJob job)
-                    {
-                        bool newState = !job.IsEnabled;
-                        
-                        // Support bulk toggling if multiple rows are selected
-                        if (QueueDataGrid.SelectedItems.Count > 1 && QueueDataGrid.SelectedItems.Contains(job))
-                        {
-                            foreach (var item in QueueDataGrid.SelectedItems)
-                            {
-                                if (item is ScheduledNwcExporter.Configuration.ModelExportJob selectedJob)
-                                {
-                                    selectedJob.IsEnabled = newState;
-                                }
-                            }
-                        }
-                        else
-                        {
-                            job.IsEnabled = newState;
-                        }
-                        
-                        e.Handled = true;
-                    }
-                }
-            };
-
-            // Support bulk toggling with Space key
-            QueueDataGrid.PreviewKeyDown += (s, e) =>
-            {
-                if (e.Key == System.Windows.Input.Key.Space && QueueDataGrid.SelectedItems.Count > 0)
-                {
-                    var firstJob = QueueDataGrid.SelectedItems[0] as ScheduledNwcExporter.Configuration.ModelExportJob;
-                    if (firstJob != null)
-                    {
-                        bool newState = !firstJob.IsEnabled;
-                        foreach (var item in QueueDataGrid.SelectedItems)
-                        {
-                            if (item is ScheduledNwcExporter.Configuration.ModelExportJob job)
-                            {
-                                job.IsEnabled = newState;
-                            }
-                        }
-                        e.Handled = true;
-                    }
-                }
-            };
+                // Register interactive event handlers
+                RegisterSafeEventHandlers();
             }
             catch (Exception ex)
             {
@@ -106,10 +59,96 @@ namespace ScheduledNwcExporter.UI.Views
             }
         }
 
+        private void Dispatcher_UnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
+        {
+            _logger?.Error("UI", $"Unhandled exception caught: {e.Exception.Message}", string.Empty, "Dispatcher", e.Exception);
+            Autodesk.Revit.UI.TaskDialog.Show("Hatco NWC Exporter - Error", $"An unexpected UI error occurred:\n{e.Exception.Message}\n\nThe application will attempt to continue, but please check the logs.");
+            e.Handled = true;
+        }
+
+        private void RegisterSafeEventHandlers()
+        {
+            // Enable single-click checkbox toggling on DataGrid
+            QueueDataGrid.PreviewMouseLeftButtonDown += (s, e) =>
+            {
+                try
+                {
+                    var dep = e.OriginalSource as DependencyObject;
+                    while (dep != null && !(dep is DataGridCell) && !(dep is DataGridColumnHeader))
+                    {
+                        dep = VisualTreeHelper.GetParent(dep);
+                    }
+
+                    if (dep is DataGridCell cell && cell.Column is DataGridCheckBoxColumn)
+                    {
+                        if (cell.DataContext is ModelExportJob job)
+                        {
+                            bool newState = !job.IsEnabled;
+                            
+                            // Support bulk toggling if multiple rows are selected
+                            if (QueueDataGrid.SelectedItems.Count > 1 && QueueDataGrid.SelectedItems.Contains(job))
+                            {
+                                var selectedJobs = QueueDataGrid.SelectedItems.Cast<object>()
+                                    .OfType<ModelExportJob>()
+                                    .ToList();
+
+                                foreach (var selectedJob in selectedJobs)
+                                {
+                                    selectedJob.IsEnabled = newState;
+                                }
+                            }
+                            else
+                            {
+                                job.IsEnabled = newState;
+                            }
+                            
+                            e.Handled = true;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.Error("UI", $"Error in checkbox click handler: {ex.Message}", string.Empty, "Interaction");
+                }
+            };
+
+            // Support bulk toggling with Space key
+            QueueDataGrid.PreviewKeyDown += (s, e) =>
+            {
+                try
+                {
+                    if (e.Key == System.Windows.Input.Key.Space && QueueDataGrid.SelectedItems.Count > 0)
+                    {
+                        var selectedJobs = QueueDataGrid.SelectedItems.Cast<object>()
+                            .OfType<ModelExportJob>()
+                            .ToList();
+
+                        if (selectedJobs.Any())
+                        {
+                            bool newState = !selectedJobs.First().IsEnabled;
+                            foreach (var job in selectedJobs)
+                            {
+                                job.IsEnabled = newState;
+                            }
+                            e.Handled = true;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.Error("UI", $"Error in key down handler: {ex.Message}", string.Empty, "Interaction");
+                }
+            };
+        }
+
         private void MainWindow_Closed(object? sender, EventArgs e)
         {
-            _viewModel.Shutdown();
-            _exportQueueEvent.Dispose();
+            try
+            {
+                _viewModel?.Shutdown();
+                _exportQueueEvent?.Dispose();
+            }
+            catch { /* Ignore cleanup errors */ }
         }
     }
 
@@ -132,24 +171,26 @@ namespace ScheduledNwcExporter.UI.Views
     {
         public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
         {
-            string status = value as string ?? string.Empty;
-
-            if (status == "Success")
+            try
             {
-                // Darker shade of pale green for completed items
-                return new SolidColorBrush(Color.FromRgb(144, 238, 144)); // LightGreen
-            }
+                string status = value as string ?? string.Empty;
 
-            if (status != "Ready" && status != "Skipped" && status != "Cancelled" && status != "Failed")
-            {
-                // Active/Processing status - PaleGreen
-                return new SolidColorBrush(Color.FromRgb(152, 251, 152)); // PaleGreen
-            }
+                if (status == "Success")
+                {
+                    return new SolidColorBrush(Color.FromRgb(144, 238, 144)); // LightGreen
+                }
 
-            if (status == "Failed")
-            {
-                return new SolidColorBrush(Color.FromRgb(255, 235, 235)); // Very light red for failure
+                if (status != "Ready" && status != "Skipped" && status != "Cancelled" && status != "Failed" && !string.IsNullOrEmpty(status))
+                {
+                    return new SolidColorBrush(Color.FromRgb(152, 251, 152)); // PaleGreen
+                }
+
+                if (status == "Failed")
+                {
+                    return new SolidColorBrush(Color.FromRgb(255, 235, 235)); // Very light red
+                }
             }
+            catch { }
 
             return Brushes.Transparent;
         }
