@@ -31,11 +31,34 @@ namespace ScheduledNwcExporter.UI.Views
 
             _exportQueueHandler = new ExportQueueExternalEventHandler(logger, configurationManager.CurrentSettings, Dispatcher);
             _exportQueueEvent = ExternalEvent.Create(_exportQueueHandler);
-            _exportQueueHandler.AttachExternalEvent(_exportQueueEvent);
+            _exportQueueHandler.AttachExternalEvent(_exportQueueHandler);
 
             _viewModel = new MainViewModel(configurationManager, logger, _exportQueueHandler);
             DataContext = _viewModel;
             Closed += MainWindow_Closed;
+
+            // Enable single-click checkbox toggling on DataGrid
+            QueueDataGrid.PreviewMouseLeftButtonDown += (s, e) =>
+            {
+                var dep = (System.Windows.DependencyObject)e.OriginalSource;
+                while (dep != null && !(dep is System.Windows.Controls.DataGridCell) && !(dep is System.Windows.Controls.Primitives.DataGridColumnHeader))
+                {
+                    dep = System.Windows.Media.VisualTreeHelper.GetParent(dep);
+                }
+
+                if (dep is System.Windows.Controls.DataGridCell cell && cell.Column is System.Windows.Controls.DataGridCheckBoxColumn)
+                {
+                    if (!cell.IsEditing)
+                    {
+                        cell.IsSelected = true;
+                        if (cell.DataContext is ScheduledNwcExporter.Configuration.ModelExportJob job)
+                        {
+                            job.IsEnabled = !job.IsEnabled;
+                            e.Handled = true;
+                        }
+                    }
+                }
+            };
         }
 
         private void MainWindow_Closed(object? sender, EventArgs e)

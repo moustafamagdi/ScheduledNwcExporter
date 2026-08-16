@@ -257,6 +257,15 @@ namespace ScheduledNwcExporter.UI.ViewModels
             _findMissingMaterials = settings.Export.FindMissingMaterials;
             _coordinates = settings.Export.Coordinates;
             _overwritePolicy = settings.Export.OverwritePolicy;
+            foreach (var job in settings.Jobs)
+            {
+                // Reset status on startup so they appear clean without success colors until run
+                if (string.Equals(job.LastStatus, "Success", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(job.LastStatus, "Failed", StringComparison.OrdinalIgnoreCase))
+                {
+                    job.LastStatus = "Ready";
+                }
+            }
             Jobs = new ObservableCollection<ModelExportJob>(settings.Jobs);
 
             _scheduleManager = new ScheduleManager(settings, _logger);
