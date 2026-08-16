@@ -1,18 +1,12 @@
 using System;
-using System.Collections.Generic;
 using Autodesk.Revit.DB;
 using ScheduledNwcExporter.Logging;
 
 namespace ScheduledNwcExporter.Revit
 {
-    public class WorksetInfo
-    {
-        public string Name { get; set; } = string.Empty;
-        public WorksetId Id { get; set; } = WorksetId.InvalidWorksetId;
-        public bool IsOpen { get; set; }
-        public WorksetKind Kind { get; set; }
-    }
-
+    /// <summary>
+    /// Verifies the workset state of a document after it has been opened.
+    /// </summary>
     public class WorksetManager
     {
         private readonly ILogger _logger;
@@ -22,52 +16,59 @@ namespace ScheduledNwcExporter.Revit
             _logger = logger;
         }
 
-        public bool VerifyAndOpenAllWorksets(Document doc, string modelName)
+        /// <summary>
+        /// Logs each user workset's state and returns false if a workshared document still contains
+        /// closed user worksets. Worksets are configured before opening in <see cref="DocumentManager"/>;
+        /// Revit does not expose a supported API to open them after the document has loaded.
+        /// </summary>
+        public bool VerifyAllUserWorksetsOpen(Document doc, string modelName)
         {
             try
             {
                 if (!doc.IsWorkshared)
                 {
-                    _logger.Info("Worksets", "Model is not workshared. No workset checks needed.", modelName, "WorksetVerification");
+                    _logger.Info("Worksets", "Model is not workshared; workset verification is not required.", modelName, "WorksetVerification");
                     return true;
                 }
 
-                FilteredWorksetCollector collector = new FilteredWorksetCollector(doc);
-                collector.OfKind(WorksetKind.UserWorkset);
+                int totalUserWorksets = 0;
+                int openUserWorksets = 0;
+                int closedUserWorksets = 0;
 
-                int totalWorksets = 0;
-                int openWorksets = 0;
-
+                var collector = new FilteredWorksetCollector(doc).OfKind(WorksetKind.UserWorkset);
                 foreach (Workset workset in collector)
                 {
-                    totalWorksets++;
+                    totalUserWorksets++;
                     bool isOpen = workset.IsOpen;
-                    string wsName = workset.Name;
-                    
-                    _logger.Debug("Worksets", $"Workset '{wsName}' (ID: {workset.Id.IntegerValue}) State: {(isOpen ? "Open" : "Closed")}", modelName, "WorksetVerification");
+
+                    _logger.Debug(
+                        "Worksets",
+                        $"Workset '{workset.Name}' (ID: {workset.Id.IntegerValue}) state: {(isOpen ? "Open" : "Closed")}",
+                        modelName,
+                        "WorksetVerification");
 
                     if (isOpen)
                     {
-                        openWorksets++;
+                        openUserWorksets++;
                     }
                     else
                     {
-                        // Attempt to open if closed
-                        try
-                        {
-                            WorksetTable.OpenWorksets(doc, new List<WorksetId> { workset.Id });
-                            _logger.Info("Worksets", $"Successfully opened closed user workset: {wsName}", modelName, "WorksetVerification");
-                            openWorksets++;
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.Warning("Worksets", $"Failed to open user workset '{wsName}': {ex.Message}", modelName, "WorksetVerification", ex);
-                        }
+                        closedUserWorksets++;
+                        _logger.Error(
+                            "Worksets",
+                            $"Required user workset is closed after opening: '{workset.Name}' (ID: {workset.Id.IntegerValue}).",
+                            modelName,
+                            "WorksetVerification");
                     }
                 }
 
-                _logger.Info("Worksets", $"Workset verification complete. Total user worksets: {totalWorksets}, Open: {openWorksets}", modelName, "WorksetVerification");
-                return true;
+                _logger.Info(
+                    "Worksets",
+                    $"Workset verification complete. User worksets: {totalUserWorksets}; open: {openUserWorksets}; closed: {closedUserWorksets}.",
+                    modelName,
+                    "WorksetVerification");
+
+                return closedUserWorksets == 0;
             }
             catch (Exception ex)
             {

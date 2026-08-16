@@ -121,7 +121,10 @@ namespace ScheduledNwcExporter.Queue
 
                         // 3. Verify worksets
                         job.LastStatus = "Verifying Worksets";
-                        _worksetManager.VerifyAndOpenAllWorksets(doc, modelName);
+                        if (!_worksetManager.VerifyAllUserWorksetsOpen(doc, modelName))
+                        {
+                            throw new InvalidOperationException("One or more required user worksets were closed after opening the document.");
+                        }
 
                         // 4. Inspect links
                         job.LastStatus = "Inspecting Links";
