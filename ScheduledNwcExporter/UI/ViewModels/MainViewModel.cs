@@ -1,24 +1,27 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.IO;
-using System.Threading.Tasks;
+using System.Linq;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 using ScheduledNwcExporter.Configuration;
 using ScheduledNwcExporter.Logging;
-using ScheduledNwcExporter.Queue;
+using ScheduledNwcExporter.Revit.ExternalEvents;
 using ScheduledNwcExporter.Scheduler;
-using ScheduledNwcExporter.Revit;
 
 namespace ScheduledNwcExporter.UI.ViewModels
 {
+    /// <summary>
+    /// View model for the modeless Scheduled NWC Export Manager window.
+    /// It never calls the Revit API directly; Revit operations are raised to ExportQueueExternalEventHandler.
+    /// </summary>
     public class MainViewModel : BindableBase
     {
-        private readonly Autodesk.Revit.ApplicationServices.Application _app;
         private readonly ConfigurationManager _configManager;
         private readonly FileLogger _logger;
         private readonly ScheduleManager _scheduleManager;
-        private JobProcessor? _jobProcessor;
+        private readonly ExportQueueExternalEventHandler _queueHandler;
 
         private bool _isSchedulerEnabled;
         public bool IsSchedulerEnabled
@@ -31,6 +34,15 @@ namespace ScheduledNwcExporter.UI.ViewModels
                     _configManager.CurrentSettings.Scheduler.IsSchedulerEnabled = value;
                     _configManager.SaveConfiguration();
                     UpdateNextRunText();
+
+                    if (value)
+                    {
+                        _scheduleManager.Start();
+                    }
+                    else
+                    {
+                        _scheduleManager.Stop();
+                    }
                 }
             }
         }
@@ -41,24 +53,21 @@ namespace ScheduledNwcExporter.UI.ViewModels
             get => _scheduledTimeString;
             set
             {
-                if (SetProperty(ref _scheduledTimeString, value))
+                if (SetProperty(ref _scheduledTimeString, value) && TimeSpan.TryParse(value, out TimeSpan time))
                 {
-                    if (TimeSpan.TryParse(value, out TimeSpan ts))
-                    {
-                        _configManager.CurrentSettings.Scheduler.ScheduledHour = ts.Hours;
-                        _configManager.CurrentSettings.Scheduler.ScheduledMinute = ts.Minutes;
-                        _configManager.SaveConfiguration();
-                        UpdateNextRunText();
-                    }
+                    _configManager.CurrentSettings.Scheduler.ScheduledHour = time.Hours;
+                    _configManager.CurrentSettings.Scheduler.ScheduledMinute = time.Minutes;
+                    _configManager.SaveConfiguration();
+                    UpdateNextRunText();
                 }
             }
         }
 
-        private string _nextRunText = "Today 07:00 PM";
+        private string _nextRunText = "Scheduler Disabled";
         public string NextRunText
         {
             get => _nextRunText;
-            set => SetProperty(ref _nextRunText, value);
+            private set => SetProperty(ref _nextRunText, value);
         }
 
         private bool _exportLinks;
@@ -70,20 +79,6 @@ namespace ScheduledNwcExporter.UI.ViewModels
                 if (SetProperty(ref _exportLinks, value))
                 {
                     _configManager.CurrentSettings.Export.ExportLinks = value;
-                    _configManager.SaveConfiguration();
-                }
-            }
-        }
-
-        private string _exportScope = "Model";
-        public string ExportScope
-        {
-            get => _exportScope;
-            set
-            {
-                if (SetProperty(ref _exportScope, value))
-                {
-                    _configManager.CurrentSettings.Export.ExportScope = value;
                     _configManager.SaveConfiguration();
                 }
             }
@@ -121,21 +116,21 @@ namespace ScheduledNwcExporter.UI.ViewModels
         public string CurrentActivityModel
         {
             get => _currentActivityModel;
-            set => SetProperty(ref _currentActivityModel, value);
+            private set => SetProperty(ref _currentActivityModel, value);
         }
 
         private string _currentActivityStage = "Idle";
         public string CurrentActivityStage
         {
             get => _currentActivityStage;
-            set => SetProperty(ref _currentActivityStage, value);
+            private set => SetProperty(ref _currentActivityStage, value);
         }
 
-        private int _overallProgressPercentage = 0;
+        private int _overallProgressPercentage;
         public int OverallProgressPercentage
         {
             get => _overallProgressPercentage;
-            set => SetProperty(ref _overallProgressPercentage, value);
+            private set => SetProperty(ref _overallProgressPercentage, value);
         }
 
         private ModelExportJob? _selectedJob;
@@ -145,7 +140,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
             set => SetProperty(ref _selectedJob, value);
         }
 
-        public ObservableCollection<ModelExportJob> Jobs { get; set; }
+        public ObservableCollection<ModelExportJob> Jobs { get; }
 
         public ICommand AddModelCommand { get; }
         public ICommand EditModelCommand { get; }
@@ -157,41 +152,53 @@ namespace ScheduledNwcExporter.UI.ViewModels
         public ICommand OpenSettingsCommand { get; }
         public ICommand SaveConfigurationCommand { get; }
 
-        public MainViewModel(Autodesk.Revit.ApplicationServices.Application app)
+        public MainViewModel(ConfigurationManager configManager, FileLogger logger, ExportQueueExternalEventHandler queueHandler)
         {
-            _app = app;
-            _configManager = new ConfigurationManager();
-            _logger = new FileLogger();
-            _logger.DebugMode = _configManager.CurrentSettings.DebugMode;
+            _configManager = configManager ?? throw new ArgumentNullException(nameof(configManager));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _queueHandler = queueHandler ?? throw new ArgumentNullException(nameof(queueHandler));
 
-            var settings = _configManager.CurrentSettings;
+            AppSettings settings = _configManager.CurrentSettings;
+            _logger.DebugMode = settings.DebugMode;
             _isSchedulerEnabled = settings.Scheduler.IsSchedulerEnabled;
             _scheduledTimeString = $"{settings.Scheduler.ScheduledHour:D2}:{settings.Scheduler.ScheduledMinute:D2}";
             _exportLinks = settings.Export.ExportLinks;
-            _exportScope = settings.Export.ExportScope;
             _coordinates = settings.Export.Coordinates;
             _overwritePolicy = settings.Export.OverwritePolicy;
-
             Jobs = new ObservableCollection<ModelExportJob>(settings.Jobs);
 
             _scheduleManager = new ScheduleManager(settings, _logger);
-            _scheduleManager.ScheduledTimeReached += (s, e) => ExecuteRunQueueAsync();
+            _scheduleManager.ScheduledTimeReached += (_, __) => StartQueue(Jobs.Where(job => job.IsEnabled));
             if (_isSchedulerEnabled)
             {
                 _scheduleManager.Start();
             }
 
-            UpdateNextRunText();
+            _queueHandler.ProgressChanged += QueueHandler_ProgressChanged;
+            _queueHandler.SessionCompleted += QueueHandler_SessionCompleted;
 
-            AddModelCommand = new RelayCommand(_ => AddModel());
-            EditModelCommand = new RelayCommand(_ => EditModel(), _ => SelectedJob != null);
-            RemoveModelCommand = new RelayCommand(_ => RemoveModel(), _ => SelectedJob != null);
-            RunNowCommand = new RelayCommand(_ => ExecuteRunQueueAsync());
-            PauseCommand = new RelayCommand(_ => PauseQueue());
-            TestSelectedCommand = new RelayCommand(_ => TestSelectedJob(), _ => SelectedJob != null);
-            ViewLogCommand = new RelayCommand(_ => ViewLogFile());
-            OpenSettingsCommand = new RelayCommand(_ => OpenDiagnostics());
-            SaveConfigurationCommand = new RelayCommand(_ => SaveConfig());
+            AddModelCommand = new RelayCommand(AddModel);
+            EditModelCommand = new RelayCommand(EditModel, () => SelectedJob != null);
+            RemoveModelCommand = new RelayCommand(RemoveModel, () => SelectedJob != null);
+            RunNowCommand = new RelayCommand(() => StartQueue(Jobs.Where(job => job.IsEnabled)));
+            PauseCommand = new RelayCommand(PauseQueue, () => _queueHandler.IsSessionRunning);
+            TestSelectedCommand = new RelayCommand(() =>
+            {
+                if (SelectedJob != null) StartQueue(new[] { SelectedJob });
+            }, () => SelectedJob != null && !_queueHandler.IsSessionRunning);
+            ViewLogCommand = new RelayCommand(ViewLogFile);
+            OpenSettingsCommand = new RelayCommand(OpenDiagnostics);
+            SaveConfigurationCommand = new RelayCommand(SaveConfig);
+
+            UpdateNextRunText();
+        }
+
+        public void Shutdown()
+        {
+            _scheduleManager.Stop();
+            _queueHandler.RequestCancellation();
+            _queueHandler.ProgressChanged -= QueueHandler_ProgressChanged;
+            _queueHandler.SessionCompleted -= QueueHandler_SessionCompleted;
         }
 
         private void AddModel()
@@ -200,25 +207,24 @@ namespace ScheduledNwcExporter.UI.ViewModels
             if (dialog.ShowDialog() == true && dialog.Job != null)
             {
                 Jobs.Add(dialog.Job);
-                _configManager.CurrentSettings.Jobs = new System.Collections.Generic.List<ModelExportJob>(Jobs);
-                _configManager.SaveConfiguration();
-                _logger.Info("UI", $"Added export job for model: {dialog.Job.SourceModelPath}");
+                SaveJobs();
+                _logger.Info("UI", $"Added export job: {dialog.Job.SourceModelPath}");
             }
         }
 
         private void EditModel()
         {
             if (SelectedJob == null) return;
+
             var dialog = new Views.JobEditorWindow(SelectedJob);
-            if (dialog.ShowDialog() == true)
+            if (dialog.ShowDialog() == true && dialog.Job != null)
             {
                 int index = Jobs.IndexOf(SelectedJob);
                 if (index >= 0)
                 {
-                    Jobs[index] = dialog.Job!;
-                    _configManager.CurrentSettings.Jobs = new System.Collections.Generic.List<ModelExportJob>(Jobs);
-                    _configManager.SaveConfiguration();
-                    _logger.Info("UI", $"Updated export job: {dialog.Job!.SourceModelPath}");
+                    Jobs[index] = dialog.Job;
+                    SaveJobs();
+                    _logger.Info("UI", $"Updated export job: {dialog.Job.SourceModelPath}");
                 }
             }
         }
@@ -226,58 +232,74 @@ namespace ScheduledNwcExporter.UI.ViewModels
         private void RemoveModel()
         {
             if (SelectedJob == null) return;
+
             _logger.Info("UI", $"Removed export job: {SelectedJob.SourceModelPath}");
             Jobs.Remove(SelectedJob);
-            _configManager.CurrentSettings.Jobs = new System.Collections.Generic.List<ModelExportJob>(Jobs);
-            _configManager.SaveConfiguration();
+            SaveJobs();
         }
 
-        private async void ExecuteRunQueueAsync()
+        private void StartQueue(IEnumerable<ModelExportJob> jobs)
         {
-            if (_jobProcessor != null)
+            if (_queueHandler.IsSessionRunning)
             {
                 MessageBox.Show("An export session is already running.", "Scheduled NWC Export Manager", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
-            // Verify exporter availability first
-            var exporterService = new NwcExporterService(_logger);
-            if (!exporterService.IsExporterAvailable())
+            var jobList = jobs.ToList();
+            if (jobList.Count == 0)
             {
-                MessageBox.Show("The compatible Navisworks NWC Exporter is not available in this Revit session. Cannot start export.", "Navisworks Exporter Missing", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show("There are no enabled export jobs to run.", "Scheduled NWC Export Manager", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
-            _jobProcessor = new JobProcessor(_app, _configManager.CurrentSettings, _logger);
-            _jobProcessor.JobStatusUpdated += (s, status) =>
+            SaveJobs();
+            OverallProgressPercentage = 0;
+            CurrentActivityModel = string.Empty;
+            CurrentActivityStage = "Queueing Revit external event…";
+
+            if (!_queueHandler.Start(jobList))
             {
-                CurrentActivityStage = status;
-            };
-            _jobProcessor.OverallProgressUpdated += (s, progress) =>
-            {
-                OverallProgressPercentage = progress;
-            };
-
-            var queue = new ExportQueue(Jobs);
-            var result = await Task.Run(() => _jobProcessor.ProcessQueueAsync(queue.GetActiveJobs()));
-
-            _jobProcessor = null;
-            CurrentActivityStage = "Completed";
-            OverallProgressPercentage = 100;
-
-            MessageBox.Show($"Export Session Finished!\n\nTotal: {result.TotalModels}\nSuccessful: {result.Successful}\nFailed: {result.Failed}\nDuration: {result.TotalDuration:hh\\:mm\\:ss}", "Export Summary", MessageBoxButton.OK, MessageBoxImage.Information);
+                CurrentActivityStage = "Unable to queue export session.";
+                MessageBox.Show("The export queue could not be started. The add-in may be shutting down.", "Scheduled NWC Export Manager", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private void PauseQueue()
         {
-            _jobProcessor?.Cancel();
-            _logger.Warning("UI", "Pause/Cancel requested by user.");
+            _queueHandler.RequestCancellation();
+            CurrentActivityStage = "Cancellation requested; waiting for the current safe boundary.";
         }
 
-        private void TestSelectedJob()
+        private void QueueHandler_ProgressChanged(object? sender, ExportSessionProgress progress)
         {
-            if (SelectedJob == null) return;
-            MessageBox.Show($"Testing individual job for model:\n{SelectedJob.SourceModelPath}\n\nJob is valid and ready.", "Test Job", MessageBoxButton.OK, MessageBoxImage.Information);
+            CurrentActivityModel = progress.ModelName;
+            CurrentActivityStage = progress.Stage;
+            OverallProgressPercentage = progress.PercentComplete;
+        }
+
+        private void QueueHandler_SessionCompleted(object? sender, ExportSessionSummary summary)
+        {
+            CurrentActivityModel = string.Empty;
+            CurrentActivityStage = string.IsNullOrWhiteSpace(summary.SessionError) ? "Completed" : summary.SessionError;
+            OverallProgressPercentage = 100;
+            SaveJobs();
+
+            Application.Current.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                string message = $"Export session finished.\n\nTotal: {summary.TotalModels}\nSuccessful: {summary.Successful}\nFailed: {summary.Failed}\nSkipped: {summary.Skipped}\nCancelled: {summary.Cancelled}\nDuration: {summary.Duration:hh\\:mm\\:ss}";
+                if (summary.FailedModels.Count > 0)
+                {
+                    message += "\n\nFailed Models:\n- " + string.Join("\n- ", summary.FailedModels);
+                }
+                if (!string.IsNullOrWhiteSpace(summary.SessionError))
+                {
+                    message += $"\n\nSession Error:\n{summary.SessionError}";
+                }
+
+                MessageBox.Show(message, "Scheduled NWC Export Manager", MessageBoxButton.OK,
+                    summary.Failed > 0 || !string.IsNullOrWhiteSpace(summary.SessionError) ? MessageBoxImage.Warning : MessageBoxImage.Information);
+            }), DispatcherPriority.Background);
         }
 
         private void ViewLogFile()
@@ -288,30 +310,30 @@ namespace ScheduledNwcExporter.UI.ViewModels
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Could not open log file: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Could not open the log file: {ex.Message}", "Scheduled NWC Export Manager", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
         private void OpenDiagnostics()
         {
-            var diag = new Views.DiagnosticsWindow(_logger);
-            diag.ShowDialog();
+            new Views.DiagnosticsWindow(_logger).ShowDialog();
         }
 
         private void SaveConfig()
         {
+            SaveJobs();
+            MessageBox.Show("Configuration saved successfully.", "Scheduled NWC Export Manager", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        private void SaveJobs()
+        {
+            _configManager.CurrentSettings.Jobs = new List<ModelExportJob>(Jobs);
             _configManager.SaveConfiguration();
-            MessageBox.Show("Configuration saved successfully.", "Settings", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
         private void UpdateNextRunText()
         {
-            if (!_isSchedulerEnabled)
-            {
-                NextRunText = "Scheduler Disabled";
-                return;
-            }
-            NextRunText = $"Today {ScheduledTimeString}";
+            NextRunText = _isSchedulerEnabled ? $"Daily at {ScheduledTimeString}" : "Scheduler Disabled";
         }
     }
 
@@ -319,7 +341,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
     {
         public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
 
-        protected bool SetProperty<T>(ref T storage, T value, [System.Runtime.CompilerServices.CallerMemberName] string propertyName = null!)
+        protected bool SetProperty<T>(ref T storage, T value, [System.Runtime.CompilerServices.CallerMemberName] string propertyName = "")
         {
             if (Equals(storage, value)) return false;
             storage = value;
@@ -327,7 +349,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
             return true;
         }
 
-        protected void OnPropertyChanged([System.Runtime.CompilerServices.CallerMemberName] string propertyName = null!)
+        protected void OnPropertyChanged([System.Runtime.CompilerServices.CallerMemberName] string propertyName = "")
         {
             PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(propertyName));
         }

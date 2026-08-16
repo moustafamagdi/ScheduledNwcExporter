@@ -14,18 +14,24 @@ namespace ScheduledNwcExporter.Application
         {
             try
             {
-                UIApplication uiapp = commandData.Application;
-                Autodesk.Revit.ApplicationServices.Application app = uiapp.Application;
-
-                var mainWindow = new MainWindow(app);
-                mainWindow.ShowDialog();
+                if (App.ExportManagerWindow == null || !App.ExportManagerWindow.IsVisible)
+                {
+                    var window = new MainWindow();
+                    window.Closed += (_, __) => App.ExportManagerWindow = null;
+                    App.ExportManagerWindow = window;
+                    window.Show();
+                }
+                else
+                {
+                    App.ExportManagerWindow.Activate();
+                }
 
                 return Result.Succeeded;
             }
             catch (Exception ex)
             {
                 message = ex.Message;
-                TaskDialog.Show("Scheduled NWC Exporter Error", $"An error occurred while launching the Export Manager:\n{ex.Message}");
+                TaskDialog.Show("Scheduled NWC Export Manager", $"Unable to launch the export manager:\n{ex.Message}");
                 return Result.Failed;
             }
         }

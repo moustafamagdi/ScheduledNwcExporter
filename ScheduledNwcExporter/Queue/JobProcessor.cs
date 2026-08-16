@@ -1,8 +1,5 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
 using Autodesk.Revit.DB;
 using ScheduledNwcExporter.Configuration;
 using ScheduledNwcExporter.Logging;
@@ -10,198 +7,214 @@ using ScheduledNwcExporter.Revit;
 
 namespace ScheduledNwcExporter.Queue
 {
-    public class BatchResult
+    /// <summary>
+    /// Represents the final outcome of one export job.
+    /// </summary>
+    public sealed class JobExecutionResult
     {
-        public int TotalModels { get; set; }
-        public int Successful { get; set; }
-        public int Failed { get; set; }
-        public int Skipped { get; set; }
-        public TimeSpan TotalDuration { get; set; }
-        public List<string> FailedModelNames { get; set; } = new List<string>();
+        public string ModelName { get; set; } = string.Empty;
+        public bool Succeeded { get; set; }
+        public bool Skipped { get; set; }
+        public bool Cancelled { get; set; }
+        public string ErrorMessage { get; set; } = string.Empty;
+        public TimeSpan Duration { get; set; }
     }
 
-    public class JobProcessor
+    /// <summary>
+    /// Processes one model export at a time. The caller is responsible for invoking this class only
+    /// from a valid Revit API context, such as IExternalEventHandler.Execute.
+    /// </summary>
+    public sealed class JobProcessor
     {
-        private readonly Autodesk.Revit.ApplicationServices.Application _app;
+        private readonly Autodesk.Revit.ApplicationServices.Application _application;
         private readonly AppSettings _settings;
         private readonly ILogger _logger;
-        private readonly DocumentManager _docManager;
+        private readonly DocumentManager _documentManager;
         private readonly WorksetManager _worksetManager;
         private readonly LinkManager _linkManager;
         private readonly NwcExporterService _nwcExporter;
 
-        public event EventHandler<string>? JobStatusUpdated;
-        public event EventHandler<int>? OverallProgressUpdated;
-
-        private bool _isCancelled = false;
-
-        public JobProcessor(Autodesk.Revit.ApplicationServices.Application app, AppSettings settings, ILogger logger)
+        public JobProcessor(Autodesk.Revit.ApplicationServices.Application application, AppSettings settings, ILogger logger)
         {
-            _app = app;
-            _settings = settings;
-            _logger = logger;
-            _docManager = new DocumentManager(logger);
-            _worksetManager = new WorksetManager(logger);
-            _linkManager = new LinkManager(logger);
-            _nwcExporter = new NwcExporterService(logger);
+            _application = application ?? throw new ArgumentNullException(nameof(application));
+            _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _documentManager = new DocumentManager(_logger);
+            _worksetManager = new WorksetManager(_logger);
+            _linkManager = new LinkManager(_logger);
+            _nwcExporter = new NwcExporterService(_logger);
         }
 
-        public void Cancel()
+        /// <summary>
+        /// Executes one export job, isolates failures, and always closes the programmatically opened document.
+        /// This method must never be invoked through Task.Run, a timer callback, or another background thread.
+        /// </summary>
+        public JobExecutionResult ProcessSingleJob(ModelExportJob job, Func<bool> isCancellationRequested)
         {
-            _isCancelled = true;
-            _logger.Warning("Scheduler", "Cancellation requested by user. Will stop after current safe boundary.", "", "Cancellation");
-        }
+            if (job == null) throw new ArgumentNullException(nameof(job));
+            if (isCancellationRequested == null) throw new ArgumentNullException(nameof(isCancellationRequested));
 
-        public async Task<BatchResult> ProcessQueueAsync(IEnumerable<ModelExportJob> jobs)
-        {
-            _isCancelled = false;
-            var batchResult = new BatchResult();
-            var jobList = new List<ModelExportJob>(jobs);
-            batchResult.TotalModels = jobList.Count;
+            string modelName = Path.GetFileName(job.SourceModelPath);
+            DateTime startedAt = DateTime.Now;
+            var result = new JobExecutionResult { ModelName = modelName };
 
-            DateTime startTime = DateTime.Now;
-            _logger.Info("Scheduler", $"Export session started. Total models in queue: {batchResult.TotalModels}");
-
-            int currentIndex = 0;
-
-            foreach (var job in jobList)
+            if (!job.IsEnabled)
             {
-                if (_isCancelled)
+                result.Skipped = true;
+                job.LastStatus = "Skipped";
+                _logger.Info("Job", "Disabled job skipped.", modelName, "Preflight");
+                return CompleteJob(job, result, startedAt);
+            }
+
+            int maximumAttempts = Math.Max(1, job.RetryCount + 1);
+            string lastError = string.Empty;
+
+            for (int attempt = 1; attempt <= maximumAttempts; attempt++)
+            {
+                if (isCancellationRequested())
                 {
-                    _logger.Warning("Scheduler", "Export session aborted due to user cancellation.", Path.GetFileName(job.SourceModelPath), "Cancellation");
+                    result.Cancelled = true;
+                    result.ErrorMessage = "Cancelled before beginning the next safe operation.";
+                    _logger.Warning("Job", result.ErrorMessage, modelName, "Cancellation");
                     break;
                 }
 
-                currentIndex++;
-                OverallProgressUpdated?.Invoke(this, (int)((double)currentIndex / batchResult.TotalModels * 100));
-
-                if (!job.IsEnabled)
+                if (attempt > 1)
                 {
-                    _logger.Info("Scheduler", $"Job is disabled. Skipping: {job.SourceModelPath}", Path.GetFileName(job.SourceModelPath), "Preflight");
-                    batchResult.Skipped++;
-                    job.LastStatus = "Skipped";
-                    continue;
+                    _logger.Warning("Job", $"Retrying job (attempt {attempt} of {maximumAttempts}).", modelName, "Retrying");
                 }
 
-                string modelName = Path.GetFileName(job.SourceModelPath);
-                JobStatusUpdated?.Invoke(this, $"Processing: {modelName} ({currentIndex}/{batchResult.TotalModels})");
-
-                bool success = false;
-                int attempts = 0;
-                int maxAttempts = Math.Max(1, job.RetryCount + 1);
-                string lastErrorMsg = string.Empty;
-
-                DateTime jobStart = DateTime.Now;
-
-                while (attempts < maxAttempts && !success && !_isCancelled)
+                Document? document = null;
+                try
                 {
-                    attempts++;
-                    if (attempts > 1)
+                    job.LastStatus = $"Attempt {attempt} - Validating";
+                    ValidateJobInputs(job);
+
+                    job.LastStatus = $"Attempt {attempt} - Opening model";
+                    document = _documentManager.OpenModelDetached(_application, job.SourceModelPath);
+                    if (document == null)
                     {
-                        _logger.Warning("Job", $"Retrying job (Attempt {attempts} of {maxAttempts})", modelName, "Retrying");
+                        throw new InvalidOperationException("Revit could not open the source model as a detached document.");
                     }
 
-                    Document? doc = null;
-                    try
+                    job.LastStatus = "Verifying worksets";
+                    if (!_worksetManager.VerifyAllUserWorksetsOpen(document, modelName))
                     {
-                        job.LastStatus = $"Attempt {attempts} - Opening";
-                        
-                        // 1. Preflight check
-                        if (!File.Exists(job.SourceModelPath))
-                        {
-                            throw new FileNotFoundException($"Source model file not found: {job.SourceModelPath}");
-                        }
-
-                        // 2. Open model detached
-                        doc = _docManager.OpenModelDetached(_app, job.SourceModelPath);
-                        if (doc == null)
-                        {
-                            throw new InvalidOperationException("Failed to open document detached.");
-                        }
-
-                        // 3. Verify worksets
-                        job.LastStatus = "Verifying Worksets";
-                        if (!_worksetManager.VerifyAllUserWorksetsOpen(doc, modelName))
-                        {
-                            throw new InvalidOperationException("One or more required user worksets were closed after opening the document.");
-                        }
-
-                        // 4. Inspect links
-                        job.LastStatus = "Inspecting Links";
-                        _linkManager.InspectAndLogRevitLinks(doc, modelName);
-
-                        // 5. Resolve output filename using templates
-                        string resolvedOutputName = ResolveFilenameTemplate(job.OutputFileNameTemplate, modelName);
-
-                        // 6. Export to NWC
-                        job.LastStatus = "Exporting NWC";
-                        bool exportSuccess = _nwcExporter.ExportModelToNwc(doc, job.OutputDirectory, resolvedOutputName, _settings.Export, modelName);
-
-                        if (exportSuccess)
-                        {
-                            success = true;
-                        }
-                        else
-                        {
-                            throw new Exception("NWC exporter returned failure result.");
-                        }
+                        throw new InvalidOperationException("One or more required user worksets were closed after the document opened.");
                     }
-                    catch (Exception ex)
+
+                    job.LastStatus = "Inspecting links";
+                    _linkManager.InspectAndLogRevitLinks(document, modelName);
+
+                    if (isCancellationRequested())
                     {
-                        lastErrorMsg = ex.Message;
-                        _logger.Error("Job", $"Model export failed for {modelName}: {ex.Message}", modelName, "Exporting", ex);
-                        
-                        // Permanent failure check: if file not found, do not retry
-                        if (ex is FileNotFoundException)
-                        {
-                            break;
-                        }
+                        result.Cancelled = true;
+                        result.ErrorMessage = "Cancelled before NWC export began.";
+                        _logger.Warning("Job", result.ErrorMessage, modelName, "Cancellation");
+                        break;
                     }
-                    finally
+
+                    job.LastStatus = "Exporting NWC";
+                    string outputFileName = ResolveFilenameTemplate(job.OutputFileNameTemplate, modelName);
+                    if (!_nwcExporter.ExportModelToNwc(document, job.OutputDirectory, outputFileName, _settings.Export, modelName))
                     {
-                        // 7. Safe cleanup
-                        if (doc != null)
-                        {
-                            job.LastStatus = "Closing Model";
-                            _docManager.CloseDocumentSafely(doc);
-                        }
+                        throw new InvalidOperationException("The NWC exporter did not create a valid output file.");
+                    }
+
+                    result.Succeeded = true;
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    lastError = ex.Message;
+                    _logger.Error("Job", $"Export attempt {attempt} failed: {ex.Message}", modelName, "Exporting", ex);
+
+                    // Retrying cannot resolve an absent source file or an invalid job definition.
+                    if (ex is FileNotFoundException || ex is ArgumentException || ex is DirectoryNotFoundException)
+                    {
+                        break;
                     }
                 }
-
-                TimeSpan jobDuration = DateTime.Now - jobStart;
-                job.LastDuration = jobDuration.ToString(@"hh\:mm\:ss");
-                job.LastRun = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-
-                if (success)
+                finally
                 {
-                    batchResult.Successful++;
-                    job.LastStatus = "Success";
-                    job.LastError = string.Empty;
-                    _logger.Success("Job", $"Job completed successfully for {modelName} in {job.LastDuration}", modelName, "Completed");
-                }
-                else
-                {
-                    batchResult.Failed++;
-                    job.LastStatus = "Failed";
-                    job.LastError = lastErrorMsg;
-                    batchResult.FailedModelNames.Add(modelName);
-                    _logger.Error("Job", $"Job permanently failed for {modelName}. Reason: {lastErrorMsg}", modelName, "Failed");
+                    if (document != null)
+                    {
+                        job.LastStatus = "Closing model";
+                        _documentManager.CloseDocumentSafely(document);
+                    }
                 }
             }
 
-            batchResult.TotalDuration = DateTime.Now - startTime;
-            _logger.Info("Scheduler", $"Export session finished. Successful: {batchResult.Successful}, Failed: {batchResult.Failed}, Skipped: {batchResult.Skipped}, Duration: {batchResult.TotalDuration:hh\\:mm\\:ss}");
-
-            return batchResult;
+            result.ErrorMessage = result.Succeeded || result.Cancelled ? result.ErrorMessage : lastError;
+            return CompleteJob(job, result, startedAt);
         }
 
-        private string ResolveFilenameTemplate(string template, string modelFileName)
+        private JobExecutionResult CompleteJob(ModelExportJob job, JobExecutionResult result, DateTime startedAt)
         {
-            string modelNameOnly = Path.GetFileNameWithoutExtension(modelFileName);
-            DateTime now = DateTime.Now;
+            result.Duration = DateTime.Now - startedAt;
+            job.LastRun = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+            job.LastDuration = result.Duration.ToString(@"hh\:mm\:ss");
 
+            if (result.Succeeded)
+            {
+                job.LastStatus = "Success";
+                job.LastError = string.Empty;
+                _logger.Success("Job", $"Job completed in {job.LastDuration}.", result.ModelName, "Completed");
+            }
+            else if (result.Cancelled)
+            {
+                job.LastStatus = "Cancelled";
+                job.LastError = result.ErrorMessage;
+                _logger.Warning("Job", "Job cancelled at a safe boundary.", result.ModelName, "Cancelled");
+            }
+            else if (result.Skipped)
+            {
+                job.LastStatus = "Skipped";
+            }
+            else
+            {
+                job.LastStatus = "Failed";
+                job.LastError = result.ErrorMessage;
+                _logger.Error("Job", $"Job permanently failed. Reason: {result.ErrorMessage}", result.ModelName, "Failed");
+            }
+
+            return result;
+        }
+
+        private static void ValidateJobInputs(ModelExportJob job)
+        {
+            if (string.IsNullOrWhiteSpace(job.SourceModelPath))
+            {
+                throw new ArgumentException("The source model path is empty.");
+            }
+
+            if (!job.SourceModelPath.EndsWith(".rvt", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ArgumentException("The source model must have a .rvt extension.");
+            }
+
+            if (!File.Exists(job.SourceModelPath))
+            {
+                throw new FileNotFoundException("Source model file was not found.", job.SourceModelPath);
+            }
+
+            if (string.IsNullOrWhiteSpace(job.OutputDirectory))
+            {
+                throw new ArgumentException("The output directory is empty.");
+            }
+
+            if (string.IsNullOrWhiteSpace(job.OutputFileNameTemplate))
+            {
+                throw new ArgumentException("The output filename template is empty.");
+            }
+        }
+
+        private static string ResolveFilenameTemplate(string template, string modelFileName)
+        {
+            string modelName = Path.GetFileNameWithoutExtension(modelFileName);
+            DateTime now = DateTime.Now;
             string resolved = template
-                .Replace("{ModelName}", modelNameOnly)
+                .Replace("{ModelName}", modelName)
                 .Replace("{ModelFileName}", modelFileName)
                 .Replace("{Date}", now.ToString("yyyy-MM-dd"))
                 .Replace("{Time}", now.ToString("HH-mm-ss"))
@@ -211,18 +224,12 @@ namespace ScheduledNwcExporter.Queue
                 .Replace("{Hour}", now.ToString("HH"))
                 .Replace("{Minute}", now.ToString("mm"));
 
-            // Sanitize invalid filename chars
-            foreach (char c in Path.GetInvalidFileNameChars())
+            foreach (char invalidCharacter in Path.GetInvalidFileNameChars())
             {
-                resolved = resolved.Replace(c, '_');
+                resolved = resolved.Replace(invalidCharacter, '_');
             }
 
-            if (!resolved.EndsWith(".nwc", StringComparison.OrdinalIgnoreCase))
-            {
-                resolved += ".nwc";
-            }
-
-            return resolved;
+            return resolved.EndsWith(".nwc", StringComparison.OrdinalIgnoreCase) ? resolved : resolved + ".nwc";
         }
     }
 }

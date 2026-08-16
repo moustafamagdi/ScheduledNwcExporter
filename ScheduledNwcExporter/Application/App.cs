@@ -1,58 +1,61 @@
 using System;
 using System.Reflection;
 using Autodesk.Revit.UI;
-using Autodesk.Revit.DB;
-using System.Windows.Media.Imaging;
+using ScheduledNwcExporter.UI.Views;
 
 namespace ScheduledNwcExporter.Application
 {
+    /// <summary>
+    /// Revit external application entry point and owner of the modeless export manager window.
+    /// </summary>
     public class App : IExternalApplication
     {
-        public Result OnStartup(UIControlledApplication app)
+        internal static MainWindow? ExportManagerWindow { get; set; }
+
+        public Result OnStartup(UIControlledApplication application)
         {
             try
             {
-                // Create Ribbon Tab
-                string tabName = "BIM Automation";
+                const string tabName = "BIM Automation";
                 try
                 {
-                    app.CreateRibbonTab(tabName);
+                    application.CreateRibbonTab(tabName);
                 }
                 catch
                 {
-                    // Tab might already exist
+                    // The tab may have been created by another add-in or an earlier load.
                 }
 
-                // Create Ribbon Panel
-                RibbonPanel panel = app.CreateRibbonPanel(tabName, "Navisworks Export");
-
+                RibbonPanel panel = application.CreateRibbonPanel(tabName, "Navisworks Export");
                 string assemblyPath = Assembly.GetExecutingAssembly().Location;
-
-                PushButtonData buttonData = new PushButtonData(
+                var buttonData = new PushButtonData(
                     "CmdScheduledNwcExport",
                     "Scheduled NWC\nManager",
                     assemblyPath,
-                    "ScheduledNwcExporter.Application.Command"
-                );
-
-                PushButton pushButton = panel.AddItem(buttonData) as PushButton;
-                if (pushButton != null)
+                    "ScheduledNwcExporter.Application.Command")
                 {
-                    pushButton.ToolTip = "Launch the Scheduled NWC Export Manager to configure automated batch NWC exports.";
-                    pushButton.LongDescription = "Provides a modeless WPF interface to manage model export queues, daily schedules, Navisworks export options, and detailed session logging.";
-                }
+                    ToolTip = "Launch the Scheduled NWC Export Manager.",
+                    LongDescription = "Configure model queues and start Revit 2024 NWC exports through a safe ExternalEvent-driven workflow."
+                };
 
+                panel.AddItem(buttonData);
                 return Result.Succeeded;
             }
             catch (Exception ex)
             {
-                TaskDialog.Show("Scheduled NWC Exporter", $"Failed to initialize OnStartup: {ex.Message}");
+                TaskDialog.Show("Scheduled NWC Export Manager", $"Failed to initialize the add-in:\n{ex.Message}");
                 return Result.Failed;
             }
         }
 
-        public Result OnShutdown(UIControlledApplication app)
+        public Result OnShutdown(UIControlledApplication application)
         {
+            if (ExportManagerWindow != null)
+            {
+                ExportManagerWindow.Close();
+                ExportManagerWindow = null;
+            }
+
             return Result.Succeeded;
         }
     }
