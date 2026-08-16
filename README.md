@@ -138,3 +138,19 @@ The **Performance Mode** option is enabled by default. For each job, the add-in 
 This mode is intended for local or network-based RVT models. It should not be assumed to support cloud-hosted external references because `TransmissionData` does not expose external-server reference data.[3]
 
 [3]: https://www.revitapidocs.com/2024/d78d1e9c-1cee-1336-88d5-b605dacd077d.htm "Revit 2024 TransmissionData Class"
+
+
+---
+
+## 9. Dedicated 3D View Export Scope
+
+To ensure that the exported NWC file contains all model elements with proper visibility rules, the add-in automatically prepares or uses a dedicated 3D isometric view named **`NWC_AutoExport_3D_View`** inside the opened document:
+
+| Rule | Action |
+| :--- | :--- |
+| **Export Scope** | Configured to `NavisworksExportScope.View` using the dedicated 3D view ID. |
+| **Worksets** | Iterates all user worksets and explicitly ensures they are set to `WorksetVisibility.Visible` in the export view. |
+| **Levels & Grids** | Explicitly hides `BuiltInCategory.OST_Levels` and `BuiltInCategory.OST_Grids` so construction datums do not clutter coordination models. |
+| **Section Box & Detail** | Disables the section box to include all model geometry and sets detail level to **Fine**. |
+
+This guarantees that your export matches a consistent, clean coordination view without modifying your source RVT or source views.

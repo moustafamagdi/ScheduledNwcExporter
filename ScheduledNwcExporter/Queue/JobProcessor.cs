@@ -34,6 +34,7 @@ namespace ScheduledNwcExporter.Queue
         private readonly LinkManager _linkManager;
         private readonly NwcExporterService _nwcExporter;
         private readonly TemporaryModelCopyService _temporaryModelCopyService;
+        private readonly ExportViewService _exportViewService;
 
         public JobProcessor(Autodesk.Revit.ApplicationServices.Application application, AppSettings settings, ILogger logger)
         {
@@ -45,6 +46,7 @@ namespace ScheduledNwcExporter.Queue
             _linkManager = new LinkManager(_logger);
             _nwcExporter = new NwcExporterService(_logger);
             _temporaryModelCopyService = new TemporaryModelCopyService(_logger);
+            _exportViewService = new ExportViewService(_logger);
         }
 
         /// <summary>
@@ -123,9 +125,12 @@ namespace ScheduledNwcExporter.Queue
                         break;
                     }
 
+                    job.LastStatus = "Preparing export view";
+                    ElementId? exportViewId = _exportViewService.GetOrCreateExportView(document, modelName);
+
                     job.LastStatus = "Exporting NWC";
                     string outputFileName = ResolveFilenameTemplate(job.OutputFileNameTemplate, modelName);
-                    if (!_nwcExporter.ExportModelToNwc(document, job.OutputDirectory, outputFileName, _settings.Export, modelName))
+                    if (!_nwcExporter.ExportModelToNwc(document, job.OutputDirectory, outputFileName, _settings.Export, exportViewId, modelName))
                     {
                         throw new InvalidOperationException("The NWC exporter did not create a valid output file.");
                     }
@@ -138,7 +143,6 @@ namespace ScheduledNwcExporter.Queue
                     lastError = ex.Message;
                     _logger.Error("Job", $"Export attempt {attempt} failed: {ex.Message}", modelName, "Exporting", ex);
 
-                    // Retrying cannot resolve an absent source file or an invalid job definition.
                     if (ex is FileNotFoundException || ex is ArgumentException || ex is DirectoryNotFoundException)
                     {
                         break;

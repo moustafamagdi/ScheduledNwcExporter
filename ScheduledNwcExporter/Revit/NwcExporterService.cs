@@ -15,7 +15,7 @@ namespace ScheduledNwcExporter.Revit
 
         public NwcExporterService(ILogger logger)
         {
-            _logger = logger;
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         public bool IsExporterAvailable()
@@ -34,10 +34,10 @@ namespace ScheduledNwcExporter.Revit
         }
 
         /// <summary>
-        /// Exports the supplied document to NWC and verifies that a non-empty output file was produced.
-        /// In Revit 2024, Document.Export with NavisworksExportOptions returns void rather than a status value.
+        /// Exports the supplied document to NWC using a dedicated 3D view where all worksets and elements are visible
+        /// and Levels and Grids are hidden.
         /// </summary>
-        public bool ExportModelToNwc(Document doc, string outputDirectory, string outputFileName, ExportSettings settings, string modelName)
+        public bool ExportModelToNwc(Document doc, string outputDirectory, string outputFileName, ExportSettings settings, ElementId? exportViewId, string modelName)
         {
             try
             {
@@ -76,17 +76,26 @@ namespace ScheduledNwcExporter.Revit
                     ExportLinks = settings.ExportLinks,
                     ExportElementIds = settings.ExportElementIds,
                     ExportRoomGeometry = settings.ExportRoomGeometry,
-                    ExportScope = NavisworksExportScope.Model,
                     Coordinates = string.Equals(settings.Coordinates, "Shared", StringComparison.OrdinalIgnoreCase)
                         ? NavisworksCoordinates.Shared
                         : NavisworksCoordinates.Internal
                 };
 
+                if (exportViewId != null && exportViewId != ElementId.InvalidElementId)
+                {
+                    exportOptions.ExportScope = NavisworksExportScope.View;
+                    exportOptions.ViewId = exportViewId;
+                    _logger.Info("Export", $"Export scope configured to View (View ID: {exportViewId.IntegerValue}). Levels and Grids hidden; all worksets visible.", modelName, "Exporting");
+                }
+                else
+                {
+                    exportOptions.ExportScope = NavisworksExportScope.Model;
+                    _logger.Info("Export", "Export scope configured to Model (fallback).", modelName, "Exporting");
+                }
+
                 string exportName = Path.GetFileNameWithoutExtension(outputFileName);
                 _logger.Info("Export", $"Starting NWC export to '{fullOutputPath}' (ExportLinks = {exportOptions.ExportLinks}).", modelName, "Exporting");
 
-                // Revit 2024 defines this Document.Export overload with a void return type. An API
-                // exception or missing/empty result is therefore treated as an export failure.
                 doc.Export(outputDirectory, exportName, exportOptions);
 
                 if (!File.Exists(fullOutputPath))
