@@ -1,0 +1,131 @@
+<Window x:Class="ScheduledNwcExporter.UI.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Scheduled NWC Export Manager" Height="700" Width="900"
+        WindowStartupLocation="CenterScreen" Background="#FFF5F5F5">
+    <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header / Status Banner -->
+        <Border Grid.Row="0" Background="#FF2D2D30" Padding="15" CornerRadius="4" Margin="0,0,0,15">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="Scheduled NWC Export Manager" FontSize="18" FontWeight="Bold" Foreground="White"/>
+                    <TextBlock Text="Production-grade automated batch NWC export for Revit 2025" FontSize="12" Foreground="#FFD0D0D0" Margin="0,3,0,0"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Vertical" HorizontalAlignment="Right">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="10" Height="10" Fill="{Binding IsSchedulerEnabled, Converter={StaticResource BoolToColorConverter}}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <TextBlock Text="{Binding NextRunText}" Foreground="White" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Model Queue List -->
+        <GroupBox Grid.Row="1" Header="Export Model Queue" FontWeight="Bold" Padding="10">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
+                    <Button Content=" + Add Model " Command="{Binding AddModelCommand}" Width="100" Height="28" Margin="0,0,8,0"/>
+                    <Button Content=" Edit " Command="{Binding EditModelCommand}" Width="75" Height="28" Margin="0,0,8,0"/>
+                    <Button Content=" Remove " Command="{Binding RemoveModelCommand}" Width="75" Height="28" Margin="0,0,8,0"/>
+                </StackPanel>
+
+                <DataGrid Grid.Row="1" ItemsSource="{Binding Jobs}" SelectedItem="{Binding SelectedJob}" AutoGenerateColumns="False" CanUserAddRows="False" FontWeight="Normal" Background="White">
+                    <DataGrid.Columns>
+                        <DataGridCheckBoxColumn Header="Enabled" Binding="{Binding IsEnabled}" Width="60"/>
+                        <DataGridTextColumn Header="Source Model" Binding="{Binding SourceModelPath}" Width="300" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Output Folder" Binding="{Binding OutputDirectory}" Width="220" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Status" Binding="{Binding LastStatus}" Width="100" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Last Run" Binding="{Binding LastRun}" Width="120" IsReadOnly="True"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Grid>
+        </GroupBox>
+
+        <!-- Schedule & Settings Panel -->
+        <Grid Grid.Row="2" Margin="0,15,0,15">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <GroupBox Grid.Column="0" Header="Schedule Settings" FontWeight="Bold" Padding="10" Margin="0,0,8,0">
+                <StackPanel>
+                    <CheckBox Content="Enable Automatic Schedule" IsChecked="{Binding IsSchedulerEnabled}" Margin="0,0,0,10"/>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Run Every Day at (HH:mm): " VerticalAlignment="Center" Margin="0,0,10,0"/>
+                        <TextBox Text="{Binding ScheduledTimeString}" Width="80" Height="25" VerticalContentAlignment="Center"/>
+                    </StackPanel>
+                    <TextBlock Text="Note: Automatic scheduling requires Revit to remain running." FontSize="11" Foreground="Gray" Margin="0,8,0,0" TextWrapping="Wrap"/>
+                </StackPanel>
+            </GroupBox>
+
+            <GroupBox Grid.Column="1" Header="Export Options" FontWeight="Bold" Padding="10" Margin="8,0,0,0">
+                <StackPanel>
+                    <CheckBox Content="Export Revit Links (ExportLinks = false recommended)" IsChecked="{Binding ExportLinks}" Margin="0,0,0,6"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,6">
+                        <TextBlock Text="Coordinates:" Width="90" VerticalAlignment="Center"/>
+                        <ComboBox SelectedItem="{Binding Coordinates}" Width="150" Height="24">
+                            <ComboBoxItem Content="Shared"/>
+                            <ComboBoxItem Content="Internal"/>
+                        </ComboBox>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                        <TextBlock Text="Overwrite Policy:" Width="90" VerticalAlignment="Center"/>
+                        <ComboBox SelectedItem="{Binding OverwritePolicy}" Width="150" Height="24">
+                            <ComboBoxItem Content="Overwrite"/>
+                            <ComboBoxItem Content="Skip"/>
+                            <ComboBoxItem Content="TimestampedCopy"/>
+                        </ComboBox>
+                    </StackPanel>
+                </StackPanel>
+            </GroupBox>
+        </Grid>
+
+        <!-- Current Activity / Progress -->
+        <Border Grid.Row="3" Background="White" BorderBrush="#FFDDDDDD" BorderThickness="1" Padding="12" CornerRadius="4" Margin="0,0,0,15">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="Current Activity" FontWeight="Bold" Margin="0,0,0,4"/>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Stage: " FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding CurrentActivityStage}"/>
+                    </StackPanel>
+                    <ProgressBar Value="{Binding OverallProgressPercentage}" Minimum="0" Maximum="100" Height="14" Margin="0,8,0,0"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content=" Run Now " Command="{Binding RunNowCommand}" Width="90" Height="30" Margin="0,0,8,0" FontWeight="Bold"/>
+                    <Button Content=" Pause " Command="{Binding PauseCommand}" Width="75" Height="30" Margin="0,0,8,0"/>
+                    <Button Content=" Test Job " Command="{Binding TestSelectedCommand}" Width="80" Height="30"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Footer Buttons -->
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content=" View Log " Command="{Binding ViewLogCommand}" Width="90" Height="30" Margin="0,0,8,0"/>
+            <Button Content=" Diagnostics " Command="{Binding OpenSettingsCommand}" Width="90" Height="30" Margin="0,0,8,0"/>
+            <Button Content=" Save Config " Command="{Binding SaveConfigurationCommand}" Width="90" Height="30"/>
+        </StackPanel>
+    </Grid>
+</Window>
