@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:ScheduledNwcExporter.UI.Views"
-        Title="Scheduled NWC Export Manager" Height="700" Width="900"
+        Title="Hatco NWC Exporter" Height="750" Width="950"
         WindowStartupLocation="CenterScreen" Background="#FFF5F5F5">
     <Window.Resources>
         <local:BoolToColorConverter x:Key="BoolToColorConverter" />
@@ -25,8 +25,8 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel>
-                    <TextBlock Text="Scheduled NWC Export Manager" FontSize="18" FontWeight="Bold" Foreground="White"/>
-                    <TextBlock Text="Production-grade automated batch NWC export for Revit 2024" FontSize="12" Foreground="#FFD0D0D0" Margin="0,3,0,0"/>
+                    <TextBlock Text="Hatco NWC Exporter" FontSize="18" FontWeight="Bold" Foreground="White"/>
+                    <TextBlock Text="Automated batch NWC export suite for Revit 2024 (Hatco BIM Tools)" FontSize="12" Foreground="#FFD0D0D0" Margin="0,3,0,0"/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Vertical" HorizontalAlignment="Right">
                     <StackPanel Orientation="Horizontal">
@@ -54,57 +54,94 @@
                 <DataGrid Grid.Row="1" ItemsSource="{Binding Jobs}" SelectedItem="{Binding SelectedJob}" AutoGenerateColumns="False" CanUserAddRows="False" FontWeight="Normal" Background="White">
                     <DataGrid.Columns>
                         <DataGridCheckBoxColumn Header="Enabled" Binding="{Binding IsEnabled}" Width="60"/>
-                        <DataGridTextColumn Header="Source Model" Binding="{Binding SourceModelPath}" Width="300" IsReadOnly="True"/>
-                        <DataGridTextColumn Header="Output Folder" Binding="{Binding OutputDirectory}" Width="220" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Source Model" Binding="{Binding SourceModelPath}" Width="310" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Output Folder" Binding="{Binding OutputDirectory}" Width="230" IsReadOnly="True"/>
                         <DataGridTextColumn Header="Status" Binding="{Binding LastStatus}" Width="100" IsReadOnly="True"/>
-                        <DataGridTextColumn Header="Last Run" Binding="{Binding LastRun}" Width="120" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Last Run" Binding="{Binding LastRun}" Width="130" IsReadOnly="True"/>
                     </DataGrid.Columns>
                 </DataGrid>
             </Grid>
         </GroupBox>
 
-        <!-- Schedule & Settings Panel -->
-        <Grid Grid.Row="2" Margin="0,15,0,15">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
+        <!-- Schedule & Settings Panel (Tabbed or Split) -->
+        <TabControl Grid.Row="2" Margin="0,15,0,15" Height="210">
+            <!-- Basic Settings & Schedule -->
+            <TabItem Header=" Schedule &amp; General " FontWeight="Bold">
+                <Grid Margin="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
 
-            <GroupBox Grid.Column="0" Header="Schedule Settings" FontWeight="Bold" Padding="10" Margin="0,0,8,0">
-                <StackPanel>
-                    <CheckBox Content="Enable Automatic Schedule" IsChecked="{Binding IsSchedulerEnabled}" Margin="0,0,0,10"/>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="Run Every Day at (HH:mm): " VerticalAlignment="Center" Margin="0,0,10,0"/>
-                        <TextBox Text="{Binding ScheduledTimeString}" Width="80" Height="25" VerticalContentAlignment="Center"/>
+                    <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                        <TextBlock Text="Automatic Schedule" FontWeight="Bold" Margin="0,0,0,6"/>
+                        <CheckBox Content="Enable Daily Schedule" IsChecked="{Binding IsSchedulerEnabled}" Margin="0,0,0,10"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <TextBlock Text="Run Every Day at (HH:mm): " VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <TextBox Text="{Binding ScheduledTimeString}" Width="80" Height="25" VerticalContentAlignment="Center"/>
+                        </StackPanel>
+                        <TextBlock Text="Note: Automatic scheduling requires Revit to remain running." FontSize="11" Foreground="Gray" TextWrapping="Wrap"/>
                     </StackPanel>
-                    <TextBlock Text="Note: Automatic scheduling requires Revit to remain running." FontSize="11" Foreground="Gray" Margin="0,8,0,0" TextWrapping="Wrap"/>
-                </StackPanel>
-            </GroupBox>
 
-            <GroupBox Grid.Column="1" Header="Export Options" FontWeight="Bold" Padding="10" Margin="8,0,0,0">
-                <StackPanel>
-                    <CheckBox Content="Performance Mode: open temporary local copy without Revit links" IsChecked="{Binding UseTemporaryCopyWithoutRevitLinks}" Margin="0,0,0,6"/>
-                    <TextBlock Text="The source RVT remains unchanged. Top-level Revit links are disabled only in the temporary copy." FontSize="11" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,8"/>
-                    <CheckBox Content="Export Revit Links (disabled by default)" IsChecked="{Binding ExportLinks}" Margin="0,0,0,6"/>
-                    <TextBlock Text="Export Scope: Dedicated 3D View (NWC_AutoExport_3D_View) — all worksets visible, Levels/Grids hidden." FontSize="11" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,8"/>
-                    <StackPanel Orientation="Horizontal" Margin="0,4,0,6">
-                        <TextBlock Text="Coordinates:" Width="90" VerticalAlignment="Center"/>
-                        <ComboBox SelectedValue="{Binding Coordinates}" SelectedValuePath="Content" Width="150" Height="24">
-                            <ComboBoxItem Content="Shared"/>
-                            <ComboBoxItem Content="Internal"/>
-                        </ComboBox>
+                    <StackPanel Grid.Column="1" Margin="10,0,0,0">
+                        <TextBlock Text="Basic Export Behavior" FontWeight="Bold" Margin="0,0,0,6"/>
+                        <CheckBox Content="Performance Mode (temporary no-link copy)" IsChecked="{Binding UseTemporaryCopyWithoutRevitLinks}" Margin="0,0,0,6"/>
+                        <CheckBox Content="Export Revit Links (disabled by default)" IsChecked="{Binding ExportLinks}" Margin="0,0,0,6"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,4,0,6">
+                            <TextBlock Text="Coordinates:" Width="110" VerticalAlignment="Center"/>
+                            <ComboBox SelectedValue="{Binding Coordinates}" SelectedValuePath="Content" Width="160" Height="24">
+                                <ComboBoxItem Content="Shared"/>
+                                <ComboBoxItem Content="Internal"/>
+                            </ComboBox>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                            <TextBlock Text="Overwrite Policy:" Width="110" VerticalAlignment="Center"/>
+                            <ComboBox SelectedValue="{Binding OverwritePolicy}" SelectedValuePath="Content" Width="160" Height="24">
+                                <ComboBoxItem Content="Overwrite"/>
+                                <ComboBoxItem Content="Skip"/>
+                                <ComboBoxItem Content="TimestampedCopy"/>
+                            </ComboBox>
+                        </StackPanel>
                     </StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                        <TextBlock Text="Overwrite Policy:" Width="90" VerticalAlignment="Center"/>
-                        <ComboBox SelectedValue="{Binding OverwritePolicy}" SelectedValuePath="Content" Width="150" Height="24">
-                            <ComboBoxItem Content="Overwrite"/>
-                            <ComboBoxItem Content="Skip"/>
-                            <ComboBoxItem Content="TimestampedCopy"/>
-                        </ComboBox>
-                    </StackPanel>
-                </StackPanel>
-            </GroupBox>
-        </Grid>
+                </Grid>
+            </TabItem>
+
+            <!-- Advanced Navisworks Options -->
+            <TabItem Header=" Advanced Export Options " FontWeight="Bold">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <Grid Margin="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                            <CheckBox Content="Divide File Into Levels" IsChecked="{Binding DivideFileIntoLevels}" Margin="0,0,0,6"/>
+                            <CheckBox Content="Export Parts" IsChecked="{Binding ExportParts}" Margin="0,0,0,6"/>
+                            <CheckBox Content="Export URLs" IsChecked="{Binding ExportUrls}" Margin="0,0,0,6"/>
+                            <CheckBox Content="Export Room As Attribute" IsChecked="{Binding ExportRoomAsAttribute}" Margin="0,0,0,6"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1" Margin="10,0,0,0">
+                            <CheckBox Content="Convert Lights" IsChecked="{Binding ConvertLights}" Margin="0,0,0,6"/>
+                            <CheckBox Content="Find Missing Materials" IsChecked="{Binding FindMissingMaterials}" Margin="0,0,0,6"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,6">
+                                <TextBlock Text="Parameters:" Width="110" VerticalAlignment="Center"/>
+                                <ComboBox SelectedValue="{Binding ParameterExportMode}" SelectedValuePath="Content" Width="150" Height="24">
+                                    <ComboBoxItem Content="All"/>
+                                    <ComboBoxItem Content="Elements"/>
+                                    <ComboBoxItem Content="None"/>
+                                </ComboBox>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                <TextBlock Text="Faceting Factor:" Width="110" VerticalAlignment="Center"/>
+                                <TextBox Text="{Binding FacetingFactor}" Width="80" Height="24" VerticalContentAlignment="Center"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
 
         <!-- Current Activity / Progress -->
         <Border Grid.Row="3" Background="White" BorderBrush="#FFDDDDDD" BorderThickness="1" Padding="12" CornerRadius="4" Margin="0,0,0,15">

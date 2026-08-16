@@ -76,10 +76,30 @@ namespace ScheduledNwcExporter.Revit
                     ExportLinks = settings.ExportLinks,
                     ExportElementIds = settings.ExportElementIds,
                     ExportRoomGeometry = settings.ExportRoomGeometry,
+                    DivideFileIntoLevels = settings.DivideFileIntoLevels,
+                    ExportParts = settings.ExportParts,
+                    FacetingFactor = settings.FacetingFactor,
+                    ExportUrls = settings.ExportUrls,
+                    ExportRoomAsAttribute = settings.ExportRoomAsAttribute,
+                    ConvertLights = settings.ConvertLights,
+                    FindMissingMaterials = settings.FindMissingMaterials,
                     Coordinates = string.Equals(settings.Coordinates, "Shared", StringComparison.OrdinalIgnoreCase)
                         ? NavisworksCoordinates.Shared
                         : NavisworksCoordinates.Internal
                 };
+
+                if (string.Equals(settings.ParameterExportMode, "All", StringComparison.OrdinalIgnoreCase))
+                {
+                    exportOptions.Parameters = NavisworksParameters.All;
+                }
+                else if (string.Equals(settings.ParameterExportMode, "Elements", StringComparison.OrdinalIgnoreCase))
+                {
+                    exportOptions.Parameters = NavisworksParameters.Elements;
+                }
+                else
+                {
+                    exportOptions.Parameters = NavisworksParameters.None;
+                }
 
                 if (exportViewId != null && exportViewId != ElementId.InvalidElementId)
                 {

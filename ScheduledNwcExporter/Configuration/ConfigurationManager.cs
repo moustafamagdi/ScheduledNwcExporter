@@ -102,6 +102,16 @@ namespace ScheduledNwcExporter.Configuration
         /// as unloaded in its TransmissionData before the copy is opened for export.
         /// </summary>
         public bool UseTemporaryCopyWithoutRevitLinks { get; set; } = true;
+
+        // Advanced Options matching professional Navisworks exporters
+        public bool DivideFileIntoLevels { get; set; } = false;
+        public bool ExportParts { get; set; } = false;
+        public double FacetingFactor { get; set; } = 1.0;
+        public string ParameterExportMode { get; set; } = "All"; // All, Elements, None
+        public bool ExportUrls { get; set; } = false;
+        public bool ExportRoomAsAttribute { get; set; } = false;
+        public bool ConvertLights { get; set; } = false;
+        public bool FindMissingMaterials { get; set; } = false;
     }
 
     public class SchedulerSettings

@@ -16,7 +16,7 @@ namespace ScheduledNwcExporter.Application
         {
             try
             {
-                const string tabName = "BIM Automation";
+                const string tabName = "Hatco";
                 try
                 {
                     application.CreateRibbonTab(tabName);
@@ -29,13 +29,13 @@ namespace ScheduledNwcExporter.Application
                 RibbonPanel panel = application.CreateRibbonPanel(tabName, "Navisworks Export");
                 string assemblyPath = Assembly.GetExecutingAssembly().Location;
                 var buttonData = new PushButtonData(
-                    "CmdScheduledNwcExport",
-                    "Scheduled NWC\nManager",
+                    "CmdHatcoNwcExport",
+                    "Hatco NWC\nExporter",
                     assemblyPath,
                     "ScheduledNwcExporter.Application.Command")
                 {
-                    ToolTip = "Launch the Scheduled NWC Export Manager.",
-                    LongDescription = "Configure model queues and start Revit 2024 NWC exports through a safe ExternalEvent-driven workflow."
+                    ToolTip = "Launch the Hatco NWC Exporter.",
+                    LongDescription = "Configure automated batch NWC exports with advanced geometry, parameter, and schedule controls for Revit 2024."
                 };
 
                 panel.AddItem(buttonData);
