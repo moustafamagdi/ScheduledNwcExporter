@@ -285,7 +285,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
             OverallProgressPercentage = 100;
             SaveJobs();
 
-            Application.Current.Dispatcher.BeginInvoke(new Action(() =>
+            System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() =>
             {
                 string message = $"Export session finished.\n\nTotal: {summary.TotalModels}\nSuccessful: {summary.Successful}\nFailed: {summary.Failed}\nSkipped: {summary.Skipped}\nCancelled: {summary.Cancelled}\nDuration: {summary.Duration:hh\\:mm\\:ss}";
                 if (summary.FailedModels.Count > 0)
