@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
-using System.Text.Json;
+using Newtonsoft.Json;
 using ScheduledNwcExporter.Logging;
 
 namespace ScheduledNwcExporter.Configuration
@@ -138,10 +138,7 @@ namespace ScheduledNwcExporter.Configuration
                 if (File.Exists(_configFilePath))
                 {
                     string json = File.ReadAllText(_configFilePath);
-                    var settings = JsonSerializer.Deserialize<AppSettings>(json, new JsonSerializerOptions
-                    {
-                        PropertyNameCaseInsensitive = true
-                    });
+                    var settings = JsonConvert.DeserializeObject<AppSettings>(json);
                     if (settings != null)
                     {
                         _logger.Debug("Config", $"Loaded configuration from {_configFilePath}");
@@ -171,10 +168,7 @@ namespace ScheduledNwcExporter.Configuration
             try
             {
                 Directory.CreateDirectory(_configDirectory);
-                string json = JsonSerializer.Serialize(CurrentSettings, new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                });
+                string json = JsonConvert.SerializeObject(CurrentSettings, Formatting.Indented);
                 File.WriteAllText(_configFilePath, json);
                 _logger.Debug("Config", $"Saved configuration to {_configFilePath}");
             }
