@@ -26,7 +26,7 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel>
                     <TextBlock Text="Scheduled NWC Export Manager" FontSize="18" FontWeight="Bold" Foreground="White"/>
-                    <TextBlock Text="Production-grade automated batch NWC export for Revit 2025" FontSize="12" Foreground="#FFD0D0D0" Margin="0,3,0,0"/>
+                    <TextBlock Text="Production-grade automated batch NWC export for Revit 2024" FontSize="12" Foreground="#FFD0D0D0" Margin="0,3,0,0"/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Vertical" HorizontalAlignment="Right">
                     <StackPanel Orientation="Horizontal">
@@ -86,17 +86,17 @@
                     <CheckBox Content="Performance Mode: open temporary local copy without Revit links" IsChecked="{Binding UseTemporaryCopyWithoutRevitLinks}" Margin="0,0,0,6"/>
                     <TextBlock Text="The source RVT remains unchanged. Top-level Revit links are disabled only in the temporary copy." FontSize="11" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,8"/>
                     <CheckBox Content="Export Revit Links (disabled by default)" IsChecked="{Binding ExportLinks}" Margin="0,0,0,6"/>
-                    <TextBlock Text="Export Scope: Full Model — not the active view or a selected view." FontSize="11" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                    <TextBlock Text="Export Scope: Dedicated 3D View (NWC_AutoExport_3D_View) — all worksets visible, Levels/Grids hidden." FontSize="11" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,8"/>
                     <StackPanel Orientation="Horizontal" Margin="0,4,0,6">
                         <TextBlock Text="Coordinates:" Width="90" VerticalAlignment="Center"/>
-                        <ComboBox SelectedItem="{Binding Coordinates}" Width="150" Height="24">
+                        <ComboBox SelectedValue="{Binding Coordinates}" SelectedValuePath="Content" Width="150" Height="24">
                             <ComboBoxItem Content="Shared"/>
                             <ComboBoxItem Content="Internal"/>
                         </ComboBox>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                         <TextBlock Text="Overwrite Policy:" Width="90" VerticalAlignment="Center"/>
-                        <ComboBox SelectedItem="{Binding OverwritePolicy}" Width="150" Height="24">
+                        <ComboBox SelectedValue="{Binding OverwritePolicy}" SelectedValuePath="Content" Width="150" Height="24">
                             <ComboBoxItem Content="Overwrite"/>
                             <ComboBoxItem Content="Skip"/>
                             <ComboBoxItem Content="TimestampedCopy"/>
