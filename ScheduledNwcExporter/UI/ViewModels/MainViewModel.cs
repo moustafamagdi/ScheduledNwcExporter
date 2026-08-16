@@ -233,6 +233,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
         public ICommand SaveConfigurationCommand { get; }
         public ICommand ExportSettingsCommand { get; }
         public ICommand ImportSettingsCommand { get; }
+        // Removed separate job commands in favor of unified settings export/import
 
         public MainViewModel(ConfigurationManager configManager, FileLogger logger, ExportQueueExternalEventHandler queueHandler)
         {
@@ -439,22 +440,27 @@ namespace ScheduledNwcExporter.UI.ViewModels
 
         private void ExportSettingsToFile()
         {
-            var dlg = new Microsoft.Win32.SaveFileDialog
+            var dialog = new Views.SettingsExportDialog();
+            if (dialog.ShowDialog() == true)
             {
-                Filter = "Hatco NWC Exporter Settings (*.json)|*.json|All Files (*.*)|*.*",
-                Title = "Export Hatco NWC Exporter Settings",
-                FileName = "HatcoNwcExporter_Settings.json"
-            };
-            if (dlg.ShowDialog() == true)
-            {
-                try
+                bool includeJobs = dialog.IncludeModelList;
+                var dlg = new Microsoft.Win32.SaveFileDialog
                 {
-                    _configManager.ExportSettingsToFile(dlg.FileName);
-                    MessageBox.Show("Settings exported successfully to:\n" + dlg.FileName, "Hatco NWC Exporter", MessageBoxButton.OK, MessageBoxImage.Information);
-                }
-                catch (Exception ex)
+                    Filter = "Hatco NWC Exporter Configuration (*.json)|*.json|All Files (*.*)|*.*",
+                    Title = "Export Hatco Configuration",
+                    FileName = "HatcoNwcExporter_Config.json"
+                };
+                if (dlg.ShowDialog() == true)
                 {
-                    MessageBox.Show("Failed to export settings:\n" + ex.Message, "Hatco NWC Exporter", MessageBoxButton.OK, MessageBoxImage.Error);
+                    try
+                    {
+                        _configManager.ExportUnifiedSettings(dlg.FileName, includeJobs);
+                        MessageBox.Show("Configuration exported successfully to:\n" + dlg.FileName, "Hatco NWC Exporter", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show("Failed to export configuration:\n" + ex.Message, "Hatco NWC Exporter", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
                 }
             }
         }
@@ -463,14 +469,14 @@ namespace ScheduledNwcExporter.UI.ViewModels
         {
             var dlg = new Microsoft.Win32.OpenFileDialog
             {
-                Filter = "Hatco NWC Exporter Settings (*.json)|*.json|All Files (*.*)|*.*",
-                Title = "Import Hatco NWC Exporter Settings"
+                Filter = "Hatco NWC Exporter Configuration (*.json)|*.json|All Files (*.*)|*.*",
+                Title = "Import Hatco Configuration"
             };
             if (dlg.ShowDialog() == true)
             {
                 try
                 {
-                    _configManager.ImportSettingsFromFile(dlg.FileName);
+                    _configManager.ImportUnifiedSettings(dlg.FileName);
                     // Refresh view model properties from updated config
                     AppSettings settings = _configManager.CurrentSettings;
                     IsSchedulerEnabled = settings.Scheduler.IsSchedulerEnabled;
@@ -488,11 +494,17 @@ namespace ScheduledNwcExporter.UI.ViewModels
                     Coordinates = settings.Export.Coordinates;
                     OverwritePolicy = settings.Export.OverwritePolicy;
 
-                    MessageBox.Show("Settings imported successfully. UI has been updated.", "Hatco NWC Exporter", MessageBoxButton.OK, MessageBoxImage.Information);
+                    Jobs.Clear();
+                    foreach (var job in settings.Jobs)
+                    {
+                        Jobs.Add(job);
+                    }
+
+                    MessageBox.Show("Configuration imported successfully. UI and queue have been updated.", "Hatco NWC Exporter", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show("Failed to import settings:\n" + ex.Message, "Hatco NWC Exporter", MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show("Failed to import configuration:\n" + ex.Message, "Hatco NWC Exporter", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
         }

@@ -195,29 +195,29 @@ namespace ScheduledNwcExporter.Configuration
             }
         }
 
-        public void ExportSettingsToFile(string filePath)
+        public void ExportUnifiedSettings(string filePath, bool includeModelList)
         {
             try
             {
-                // Export export settings and scheduler settings (excluding specific jobs)
-                var exportPackage = new
+                var package = new
                 {
                     Export = CurrentSettings.Export,
                     Scheduler = CurrentSettings.Scheduler,
-                    DebugMode = CurrentSettings.DebugMode
+                    DebugMode = CurrentSettings.DebugMode,
+                    Jobs = includeModelList ? CurrentSettings.Jobs : null
                 };
-                string json = JsonConvert.SerializeObject(exportPackage, Formatting.Indented);
+                string json = JsonConvert.SerializeObject(package, Formatting.Indented);
                 File.WriteAllText(filePath, json);
-                _logger.Info("Config", $"Exported settings to {filePath}");
+                _logger.Info("Config", $"Exported unified settings to {filePath} (IncludeModelList: {includeModelList})");
             }
             catch (Exception ex)
             {
-                _logger.Error("Config", $"Failed to export settings: {ex.Message}", string.Empty, string.Empty, ex);
+                _logger.Error("Config", $"Failed to export unified settings: {ex.Message}", string.Empty, string.Empty, ex);
                 throw;
             }
         }
 
-        public void ImportSettingsFromFile(string filePath)
+        public void ImportUnifiedSettings(string filePath)
         {
             try
             {
@@ -228,13 +228,17 @@ namespace ScheduledNwcExporter.Configuration
                     CurrentSettings.Export = imported.Export ?? CurrentSettings.Export;
                     CurrentSettings.Scheduler = imported.Scheduler ?? CurrentSettings.Scheduler;
                     CurrentSettings.DebugMode = imported.DebugMode;
+                    if (imported.Jobs != null && imported.Jobs.Count > 0)
+                    {
+                        CurrentSettings.Jobs = imported.Jobs;
+                    }
                     SaveConfiguration();
-                    _logger.Info("Config", $"Successfully imported settings from {filePath}");
+                    _logger.Info("Config", $"Successfully imported unified settings from {filePath}");
                 }
             }
             catch (Exception ex)
             {
-                _logger.Error("Config", $"Failed to import settings: {ex.Message}", string.Empty, string.Empty, ex);
+                _logger.Error("Config", $"Failed to import unified settings: {ex.Message}", string.Empty, string.Empty, ex);
                 throw;
             }
         }
