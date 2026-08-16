@@ -152,11 +152,17 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel>
                     <TextBlock Text="Current Activity" FontWeight="Bold" Margin="0,0,0,4"/>
-                    <StackPanel Orientation="Horizontal">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                        <TextBlock Text="Current Model: " FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding CurrentActivityModel}" Foreground="#FF0066CC" FontWeight="Bold"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
                         <TextBlock Text="Stage: " FontWeight="SemiBold"/>
                         <TextBlock Text="{Binding CurrentActivityStage}"/>
+                        <TextBlock Text=" | " Foreground="Gray"/>
+                        <TextBlock Text="{Binding EstimatedTimeRemaining}" Foreground="#FF555555" FontStyle="Italic"/>
                     </StackPanel>
-                    <ProgressBar Value="{Binding OverallProgressPercentage}" Minimum="0" Maximum="100" Height="14" Margin="0,8,0,0"/>
+                    <ProgressBar Value="{Binding OverallProgressPercentage}" Minimum="0" Maximum="100" Height="14" Margin="0,6,0,0"/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button Content=" Run Now " Command="{Binding RunNowCommand}" Width="90" Height="30" Margin="0,0,8,0" FontWeight="Bold"/>

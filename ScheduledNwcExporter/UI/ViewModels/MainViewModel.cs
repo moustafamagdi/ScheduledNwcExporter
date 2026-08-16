@@ -196,6 +196,16 @@ namespace ScheduledNwcExporter.UI.ViewModels
             private set => SetProperty(ref _currentActivityStage, value);
         }
 
+        private string _estimatedTimeRemaining = "Calculating…";
+        public string EstimatedTimeRemaining
+        {
+            get => _estimatedTimeRemaining;
+            private set => SetProperty(ref _estimatedTimeRemaining, value);
+        }
+
+        private DateTime _sessionStartTime;
+        private int _totalJobsInSession;
+
         private int _overallProgressPercentage;
         public int OverallProgressPercentage
         {
@@ -336,6 +346,9 @@ namespace ScheduledNwcExporter.UI.ViewModels
             OverallProgressPercentage = 0;
             CurrentActivityModel = string.Empty;
             CurrentActivityStage = "Queueing Revit external event…";
+            EstimatedTimeRemaining = "Calculating…";
+            _sessionStartTime = DateTime.Now;
+            _totalJobsInSession = jobList.Count;
 
             if (!_queueHandler.Start(jobList))
             {
@@ -352,9 +365,25 @@ namespace ScheduledNwcExporter.UI.ViewModels
 
         private void QueueHandler_ProgressChanged(object? sender, ExportSessionProgress progress)
         {
-            CurrentActivityModel = progress.ModelName;
+            CurrentActivityModel = string.IsNullOrWhiteSpace(progress.ModelName) ? "None" : progress.ModelName;
             CurrentActivityStage = progress.Stage;
             OverallProgressPercentage = progress.PercentComplete;
+
+            if (progress.CompletedJobs > 0 && progress.TotalJobs > 0)
+            {
+                var elapsed = DateTime.Now - _sessionStartTime;
+                double avgTimePerJob = elapsed.TotalSeconds / progress.CompletedJobs;
+                int remainingJobs = progress.TotalJobs - progress.CompletedJobs;
+                double remainingSeconds = avgTimePerJob * remainingJobs;
+                var remainingSpan = TimeSpan.FromSeconds(remainingSeconds);
+                EstimatedTimeRemaining = remainingSpan.TotalMinutes >= 1
+                    ? $"{remainingSpan.Minutes}m {remainingSpan.Seconds}s remaining"
+                    : $"{remainingSpan.Seconds}s remaining";
+            }
+            else
+            {
+                EstimatedTimeRemaining = "Calculating…";
+            }
         }
 
         private void QueueHandler_SessionCompleted(object? sender, ExportSessionSummary summary)
