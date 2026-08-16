@@ -31,7 +31,7 @@ namespace ScheduledNwcExporter.UI.Views
 
             _exportQueueHandler = new ExportQueueExternalEventHandler(logger, configurationManager.CurrentSettings, Dispatcher);
             _exportQueueEvent = ExternalEvent.Create(_exportQueueHandler);
-            _exportQueueHandler.AttachExternalEvent(_exportQueueHandler);
+            _exportQueueHandler.AttachExternalEvent(_exportQueueEvent);
 
             _viewModel = new MainViewModel(configurationManager, logger, _exportQueueHandler);
             DataContext = _viewModel;
