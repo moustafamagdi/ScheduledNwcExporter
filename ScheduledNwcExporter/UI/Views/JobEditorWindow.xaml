@@ -1,9 +1,14 @@
 <Window x:Class="ScheduledNwcExporter.UI.Views.JobEditorWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Add / Edit Export Job" Height="420" Width="550"
-        WindowStartupLocation="CenterOwner" Background="#FFF5F5F5">
-    <Grid Margin="20">
+        xmlns:local="clr-namespace:ScheduledNwcExporter.UI.Views"
+        Title="Configure Export Job" Height="420" Width="550"
+        WindowStartupLocation="CenterOwner" Background="#FFF5F5F5" ResizeMode="NoResize">
+    <Window.Resources>
+        <local:ValidationColorConverter x:Key="ValidationColorConverter" />
+    </Window.Resources>
+
+    <Grid Margin="15">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -15,39 +20,39 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Text="Configure Export Job" FontSize="16" FontWeight="Bold" Margin="0,0,0,15"/>
+        <TextBlock Grid.Row="0" Text="Model Export Job Configuration" FontSize="16" FontWeight="Bold" Margin="0,0,0,12"/>
 
         <!-- Source Model Path -->
         <StackPanel Grid.Row="1" Margin="0,0,0,10">
-            <TextBlock Text="Source Revit Model (*.rvt):" FontWeight="SemiBold" Margin="0,0,0,4"/>
+            <TextBlock Text="Source Model Path (.rvt):" FontWeight="SemiBold" Margin="0,0,0,4"/>
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="80"/>
                 </Grid.ColumnDefinitions>
-                <TextBox Text="{Binding Job.SourceModelPath}" Height="26" VerticalContentAlignment="Center" Margin="0,0,6,0"/>
-                <Button Grid.Column="1" Content="Browse..." Command="{Binding BrowseSourceCommand}" Height="26"/>
+                <TextBox Grid.Column="0" Text="{Binding Job.SourceModelPath, UpdateSourceTrigger=PropertyChanged}" Height="26" VerticalContentAlignment="Center" Margin="0,0,6,0"/>
+                <Button Grid.Column="1" Content="Browse…" Click="BrowseSource_Click" Height="26"/>
             </Grid>
         </StackPanel>
 
-        <!-- Output Directory -->
+        <!-- Output Folder -->
         <StackPanel Grid.Row="2" Margin="0,0,0,10">
-            <TextBlock Text="Output Directory:" FontWeight="SemiBold" Margin="0,0,0,4"/>
+            <TextBlock Text="Output Folder:" FontWeight="SemiBold" Margin="0,0,0,4"/>
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="80"/>
                 </Grid.ColumnDefinitions>
-                <TextBox Text="{Binding Job.OutputDirectory}" Height="26" VerticalContentAlignment="Center" Margin="0,0,6,0"/>
-                <Button Grid.Column="1" Content="Browse..." Command="{Binding BrowseOutputCommand}" Height="26"/>
+                <TextBox Grid.Column="0" Text="{Binding Job.OutputDirectory, UpdateSourceTrigger=PropertyChanged}" Height="26" VerticalContentAlignment="Center" Margin="0,0,6,0"/>
+                <Button Grid.Column="1" Content="Browse…" Click="BrowseOutput_Click" Height="26"/>
             </Grid>
         </StackPanel>
 
         <!-- Filename Template -->
         <StackPanel Grid.Row="3" Margin="0,0,0,10">
-            <TextBlock Text="Output Filename Template:" FontWeight="SemiBold" Margin="0,0,0,4"/>
-            <TextBox Text="{Binding Job.OutputFileNameTemplate}" Height="26" VerticalContentAlignment="Center"/>
-            <TextBlock Text="Supported tokens: {ModelName}, {Date}, {Time}, {Year}, {Month}, {Day}" FontSize="11" Foreground="Gray" Margin="0,2,0,0"/>
+            <TextBlock Text="Filename Template:" FontWeight="SemiBold" Margin="0,0,0,2"/>
+            <TextBlock Text="Tokens: {ModelName}, {ModelFileName}, {Date}, {Time}, {Year}, {Month}, {Day}, {Hour}, {Minute}" FontSize="11" Foreground="Gray" Margin="0,0,0,4"/>
+            <TextBox Text="{Binding Job.OutputFileNameTemplate, UpdateSourceTrigger=PropertyChanged}" Height="26" VerticalContentAlignment="Center"/>
         </StackPanel>
 
         <!-- Retry Count & Enabled -->
@@ -64,7 +69,7 @@
         </Grid>
 
         <!-- Validation Status -->
-        <TextBlock Grid.Row="5" Text="{Binding ValidationMessage}" FontWeight="SemiBold" Foreground="#FF27AE60" Margin="0,0,0,15"/>
+        <TextBlock Grid.Row="5" Text="{Binding ValidationMessage}" FontWeight="SemiBold" Foreground="{Binding ValidationMessage, Converter={StaticResource ValidationColorConverter}}" Margin="0,0,0,15"/>
 
         <!-- Save / Cancel -->
         <StackPanel Grid.Row="7" Orientation="Horizontal" HorizontalAlignment="Right">

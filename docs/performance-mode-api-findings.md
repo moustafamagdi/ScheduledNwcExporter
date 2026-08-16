@@ -1,4 +1,4 @@
-# Revit 2024 Performance Mode: API Findings
+# Revit 2024 Performance Mode & Export Scope: API Findings
 
 ## Temporary-copy link suppression
 
@@ -21,19 +21,14 @@ transmissionData.SetDesiredReferenceData(
 6. Set `transmissionData.IsTransmitted = true` and call `TransmissionData.WriteTransmissionData` on the **temporary** model.
 7. Open the temporary copy detached and with `WorksetConfigurationOption.OpenAllWorksets`, export it, close it, and delete it.
 
-Transmission data contains top-level links. This is sufficient because nested links are not loaded when the parent Revit link is unloaded. Revit ignores desired transmission data unless `IsTransmitted` is true. For workshared models, the transmitted state also causes detached opening behavior, which is compatible with the export workflow.
+## Dedicated 3D View Export Scope
 
-This technique applies to local and network-drive models (including mapped drive paths such as `G:\...`). It must not be assumed to support cloud-hosted external references, because `TransmissionData` does not contain reference information from external servers.
+To ensure that the exported NWC file contains all model elements with proper visibility rules, the add-in automatically prepares or uses a dedicated 3D isometric view named **`NWC_AutoExport_3D_View`** inside the opened document:
 
-## Current NWC export scope
-
-The implementation currently sets:
-
-```csharp
-exportOptions.ExportScope = NavisworksExportScope.Model;
-```
-
-It does not set `NavisworksExportScope.View` and does not supply a view identifier. Therefore it exports the **entire opened host model**, not the active view and not a user-selected view. With `ExportLinks = false`, loaded Revit links are excluded from the host NWC.
+- **Export Scope**: Configured to `NavisworksExportScope.View` using the dedicated 3D view ID.
+- **Worksets**: Iterates all user worksets and explicitly ensures they are set to `WorksetVisibility.Visible` in the export view.
+- **Levels & Grids**: Explicitly hides `BuiltInCategory.OST_Levels` and `BuiltInCategory.OST_Grids` so construction datums do not clutter coordination models.
+- **Section Box & Detail**: Disables the section box to include all model geometry and sets detail level to **Fine**.
 
 ## References
 

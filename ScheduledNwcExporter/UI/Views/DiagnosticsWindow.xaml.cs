@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using System.Text;
 using System.Windows;
 using ScheduledNwcExporter.Logging;
@@ -22,10 +23,13 @@ namespace ScheduledNwcExporter.UI.Views
             var exporterService = new NwcExporterService(_logger);
             bool exporterAvailable = exporterService.IsExporterAvailable();
 
+            Version? version = Assembly.GetExecutingAssembly().GetName().Version;
+            string versionStr = version != null ? version.ToString() : "1.0.0";
+
             var sb = new StringBuilder();
             sb.AppendLine("=== Scheduled Nwc Export Manager Diagnostics ===");
-            sb.AppendLine("Add-in Version: 1.0.0");
-            sb.AppendLine("Revit Target: Revit 2025");
+            sb.AppendLine($"Add-in Version: {versionStr}");
+            sb.AppendLine("Revit Target: Revit 2024 (.NET Framework 4.8)");
             sb.AppendLine($".NET Version: {Environment.Version}");
             sb.AppendLine($"OS Version: {Environment.OSVersion}");
             sb.AppendLine($"Machine Name: {Environment.MachineName}");

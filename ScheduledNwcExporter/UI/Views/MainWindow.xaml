@@ -123,7 +123,7 @@
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button Content=" Run Now " Command="{Binding RunNowCommand}" Width="90" Height="30" Margin="0,0,8,0" FontWeight="Bold"/>
-                    <Button Content=" Pause " Command="{Binding PauseCommand}" Width="75" Height="30" Margin="0,0,8,0"/>
+                    <Button Content=" Cancel Queue " Command="{Binding PauseCommand}" Width="95" Height="30" Margin="0,0,8,0"/>
                     <Button Content=" Test Job " Command="{Binding TestSelectedCommand}" Width="80" Height="30"/>
                 </StackPanel>
             </Grid>
