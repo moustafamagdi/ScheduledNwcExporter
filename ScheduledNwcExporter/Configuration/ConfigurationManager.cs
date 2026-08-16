@@ -194,5 +194,49 @@ namespace ScheduledNwcExporter.Configuration
                 _logger.Error("Config", $"Failed to save configuration: {ex.Message}", string.Empty, string.Empty, ex);
             }
         }
+
+        public void ExportSettingsToFile(string filePath)
+        {
+            try
+            {
+                // Export export settings and scheduler settings (excluding specific jobs)
+                var exportPackage = new
+                {
+                    Export = CurrentSettings.Export,
+                    Scheduler = CurrentSettings.Scheduler,
+                    DebugMode = CurrentSettings.DebugMode
+                };
+                string json = JsonConvert.SerializeObject(exportPackage, Formatting.Indented);
+                File.WriteAllText(filePath, json);
+                _logger.Info("Config", $"Exported settings to {filePath}");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Config", $"Failed to export settings: {ex.Message}", string.Empty, string.Empty, ex);
+                throw;
+            }
+        }
+
+        public void ImportSettingsFromFile(string filePath)
+        {
+            try
+            {
+                string json = File.ReadAllText(filePath);
+                var imported = JsonConvert.DeserializeObject<AppSettings>(json);
+                if (imported != null)
+                {
+                    CurrentSettings.Export = imported.Export ?? CurrentSettings.Export;
+                    CurrentSettings.Scheduler = imported.Scheduler ?? CurrentSettings.Scheduler;
+                    CurrentSettings.DebugMode = imported.DebugMode;
+                    SaveConfiguration();
+                    _logger.Info("Config", $"Successfully imported settings from {filePath}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Config", $"Failed to import settings: {ex.Message}", string.Empty, string.Empty, ex);
+                throw;
+            }
+        }
     }
 }

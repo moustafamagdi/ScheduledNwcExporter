@@ -174,10 +174,20 @@
         </Border>
 
         <!-- Footer Buttons -->
-        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button Content=" View Log " Command="{Binding ViewLogCommand}" Width="90" Height="30" Margin="0,0,8,0"/>
-            <Button Content=" Diagnostics " Command="{Binding OpenSettingsCommand}" Width="90" Height="30" Margin="0,0,8,0"/>
-            <Button Content=" Save Config " Command="{Binding SaveConfigurationCommand}" Width="90" Height="30"/>
-        </StackPanel>
+        <Grid Grid.Row="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left">
+                <Button Content=" Export Settings… " Command="{Binding ExportSettingsCommand}" Width="110" Height="30" Margin="0,0,8,0"/>
+                <Button Content=" Import Settings… " Command="{Binding ImportSettingsCommand}" Width="110" Height="30"/>
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content=" View Log " Command="{Binding ViewLogCommand}" Width="90" Height="30" Margin="0,0,8,0"/>
+                <Button Content=" Diagnostics " Command="{Binding OpenSettingsCommand}" Width="90" Height="30" Margin="0,0,8,0"/>
+                <Button Content=" Save Config " Command="{Binding SaveConfigurationCommand}" Width="90" Height="30"/>
+            </StackPanel>
+        </Grid>
     </Grid>
 </Window>
