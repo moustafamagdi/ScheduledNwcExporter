@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  PropertyGroup>
+  <PropertyGroup>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWpf>true</UseWpf>
     <LangVersion>latest</LangVersion>
@@ -11,11 +11,11 @@
     <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
   </PropertyGroup>
 
-  ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 
-  ItemGroup>
+  <ItemGroup>
     <Reference Include="RevitAPI">
       <HintPath>C:\Program Files\Autodesk\Revit 2025\RevitAPI.dll</HintPath>
       <Private>false</Private>
