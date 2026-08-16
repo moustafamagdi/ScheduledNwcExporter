@@ -27,6 +27,12 @@ namespace ScheduledNwcExporter.Configuration
         public string OverwritePolicy { get; set; } = "Overwrite"; // Overwrite, Skip, TimestampedCopy
         public bool ExportElementIds { get; set; } = true;
         public bool ExportRoomGeometry { get; set; } = true;
+
+        /// <summary>
+        /// When enabled, the exporter creates a local temporary RVT copy and marks top-level Revit links
+        /// as unloaded in its TransmissionData before the copy is opened for export.
+        /// </summary>
+        public bool UseTemporaryCopyWithoutRevitLinks { get; set; } = true;
     }
 
     public class SchedulerSettings

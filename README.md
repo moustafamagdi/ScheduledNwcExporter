@@ -121,3 +121,20 @@ Configuration settings, export jobs, and execution logs are stored locally under
 
 ---
 *Developed by **Manus AI** for Moustafa Magdi.*
+
+
+---
+
+## 8. Performance Mode: Temporary Copy Without Revit Links
+
+The **Performance Mode** option is enabled by default. For each job, the add-in copies the source `.rvt` to a unique local temporary directory, marks its top-level Revit links as unloaded through Revit `TransmissionData`, opens that temporary copy, exports the NWC, closes the document, and deletes the temporary directory. The original source RVT is read-only throughout this workflow and is never modified.[3]
+
+| Setting | Behaviour |
+| :--- | :--- |
+| **Performance Mode enabled** | Opens a local temporary copy with top-level Revit links marked unloaded. This reduces the cost of loading large linked models while retaining all user worksets in the host model. |
+| **Performance Mode disabled** | Opens the original model path as before. Links may load during opening, although `ExportLinks = false` still excludes them from the host NWC. |
+| **Export Scope** | The current add-in uses `NavisworksExportScope.Model`; it exports the entire opened host model, not the active view and not a selected 3D view. |
+
+This mode is intended for local or network-based RVT models. It should not be assumed to support cloud-hosted external references because `TransmissionData` does not expose external-server reference data.[3]
+
+[3]: https://www.revitapidocs.com/2024/d78d1e9c-1cee-1336-88d5-b605dacd077d.htm "Revit 2024 TransmissionData Class"

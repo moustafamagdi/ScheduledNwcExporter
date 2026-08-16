@@ -83,7 +83,10 @@
 
             <GroupBox Grid.Column="1" Header="Export Options" FontWeight="Bold" Padding="10" Margin="8,0,0,0">
                 <StackPanel>
-                    <CheckBox Content="Export Revit Links (ExportLinks = false recommended)" IsChecked="{Binding ExportLinks}" Margin="0,0,0,6"/>
+                    <CheckBox Content="Performance Mode: open temporary local copy without Revit links" IsChecked="{Binding UseTemporaryCopyWithoutRevitLinks}" Margin="0,0,0,6"/>
+                    <TextBlock Text="The source RVT remains unchanged. Top-level Revit links are disabled only in the temporary copy." FontSize="11" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                    <CheckBox Content="Export Revit Links (disabled by default)" IsChecked="{Binding ExportLinks}" Margin="0,0,0,6"/>
+                    <TextBlock Text="Export Scope: Full Model — not the active view or a selected view." FontSize="11" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,8"/>
                     <StackPanel Orientation="Horizontal" Margin="0,4,0,6">
                         <TextBlock Text="Coordinates:" Width="90" VerticalAlignment="Center"/>
                         <ComboBox SelectedItem="{Binding Coordinates}" Width="150" Height="24">

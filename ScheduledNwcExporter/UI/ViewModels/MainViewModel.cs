@@ -84,6 +84,20 @@ namespace ScheduledNwcExporter.UI.ViewModels
             }
         }
 
+        private bool _useTemporaryCopyWithoutRevitLinks = true;
+        public bool UseTemporaryCopyWithoutRevitLinks
+        {
+            get => _useTemporaryCopyWithoutRevitLinks;
+            set
+            {
+                if (SetProperty(ref _useTemporaryCopyWithoutRevitLinks, value))
+                {
+                    _configManager.CurrentSettings.Export.UseTemporaryCopyWithoutRevitLinks = value;
+                    _configManager.SaveConfiguration();
+                }
+            }
+        }
+
         private string _coordinates = "Shared";
         public string Coordinates
         {
@@ -163,6 +177,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
             _isSchedulerEnabled = settings.Scheduler.IsSchedulerEnabled;
             _scheduledTimeString = $"{settings.Scheduler.ScheduledHour:D2}:{settings.Scheduler.ScheduledMinute:D2}";
             _exportLinks = settings.Export.ExportLinks;
+            _useTemporaryCopyWithoutRevitLinks = settings.Export.UseTemporaryCopyWithoutRevitLinks;
             _coordinates = settings.Export.Coordinates;
             _overwritePolicy = settings.Export.OverwritePolicy;
             Jobs = new ObservableCollection<ModelExportJob>(settings.Jobs);

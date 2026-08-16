@@ -33,6 +33,7 @@ namespace ScheduledNwcExporter.Queue
         private readonly WorksetManager _worksetManager;
         private readonly LinkManager _linkManager;
         private readonly NwcExporterService _nwcExporter;
+        private readonly TemporaryModelCopyService _temporaryModelCopyService;
 
         public JobProcessor(Autodesk.Revit.ApplicationServices.Application application, AppSettings settings, ILogger logger)
         {
@@ -43,6 +44,7 @@ namespace ScheduledNwcExporter.Queue
             _worksetManager = new WorksetManager(_logger);
             _linkManager = new LinkManager(_logger);
             _nwcExporter = new NwcExporterService(_logger);
+            _temporaryModelCopyService = new TemporaryModelCopyService(_logger);
         }
 
         /// <summary>
@@ -85,13 +87,20 @@ namespace ScheduledNwcExporter.Queue
                 }
 
                 Document? document = null;
+                PreparedModelSource? preparedModel = null;
                 try
                 {
                     job.LastStatus = $"Attempt {attempt} - Validating";
                     ValidateJobInputs(job);
 
+                    job.LastStatus = $"Attempt {attempt} - Preparing model";
+                    preparedModel = _temporaryModelCopyService.Prepare(
+                        job.SourceModelPath,
+                        _settings.Export.UseTemporaryCopyWithoutRevitLinks,
+                        modelName);
+
                     job.LastStatus = $"Attempt {attempt} - Opening model";
-                    document = _documentManager.OpenModelDetached(_application, job.SourceModelPath);
+                    document = _documentManager.OpenModelDetached(_application, preparedModel.OpenPath);
                     if (document == null)
                     {
                         throw new InvalidOperationException("Revit could not open the source model as a detached document.");
@@ -142,6 +151,8 @@ namespace ScheduledNwcExporter.Queue
                         job.LastStatus = "Closing model";
                         _documentManager.CloseDocumentSafely(document);
                     }
+
+                    preparedModel?.Dispose();
                 }
             }
 
