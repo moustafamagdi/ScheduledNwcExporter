@@ -1,14 +1,21 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0-windows</TargetFramework>
-    <UseWpf>true</UseWpf>
+    <!-- Revit 2024 hosts add-ins on .NET Framework 4.8. -->
+    <TargetFramework>net48</TargetFramework>
+    <UseWPF>true</UseWPF>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
+    <ImplicitUsings>disable</ImplicitUsings>
     <AssemblyName>ScheduledNwcExporter</AssemblyName>
     <RootNamespace>ScheduledNwcExporter</RootNamespace>
-    <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <Platforms>AnyCPU</Platforms>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Override this property when Revit is installed in a non-default location. -->
+    <RevitInstallPath Condition="'$(RevitInstallPath)' == ''">C:\Program Files\Autodesk\Revit 2024</RevitInstallPath>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,13 +24,14 @@
 
   <ItemGroup>
     <Reference Include="RevitAPI">
-      <HintPath>C:\Program Files\Autodesk\Revit 2025\RevitAPI.dll</HintPath>
+      <HintPath>$(RevitInstallPath)\RevitAPI.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="RevitAPIUI">
-      <HintPath>C:\Program Files\Autodesk\Revit 2025\RevitAPIUI.dll</HintPath>
+      <HintPath>$(RevitInstallPath)\RevitAPIUI.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="System.Windows.Forms" />
   </ItemGroup>
 
 </Project>

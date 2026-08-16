@@ -1,12 +1,12 @@
-# Scheduled NWC Export Manager for Revit 2025
+# Scheduled NWC Export Manager for Revit 2024
 
-**Scheduled NWC Export Manager** is a production-grade Autodesk Revit 2025 Add-in designed for BIM coordination managers, VDC engineers, and project architects. It automates the batch export of multiple Revit models (`.rvt`) to Navisworks cache files (`.nwc`) on a recurring daily schedule or via immediate execution, with robust failure isolation, worksharing preservation, and non-destructive background processing [1].
+**Scheduled NWC Export Manager** is a production-grade Autodesk Revit 2024 Add-in designed for BIM coordination managers, VDC engineers, and project architects. It automates the batch export of multiple Revit models (`.rvt`) to Navisworks cache files (`.nwc`) on a recurring daily schedule or via immediate execution, with robust failure isolation, worksharing preservation, and non-destructive background processing [1].
 
 ---
 
 ## 1. Core Architecture & Features
 
-- **Revit 2025 & .NET 8 Alignment**: Built specifically for Revit 2025 using modern C# features, WPF MVVM architecture, and explicit Revit API contexts [2].
+- **Revit 2024 & .NET Framework 4.8 Alignment**: Built specifically for Revit 2024 using the Revit 2024 API, .NET Framework 4.8, WPF MVVM architecture, and explicit Revit API contexts [2].
 - **Failure Isolation**: Each model export is treated as an independent job. If one model fails (e.g., locked file, missing link, or unexpected exception), the process **does not stop**; it logs the error, safely cleans up, and continues automatically with the remaining models in the queue [3].
 - **Workshared Model Safety**: Opens models detached from central (`DetachAndPreserveWorksets`) while ensuring all user-created worksets are programmatically opened and verified [4].
 - **Link & Annotation Control**: Explicitly configures `ExportLinks = false` to prevent nested links from polluting host NWC coordination models, while relying on Revit's native export engine to exclude annotations without modifying the source `.rvt` files [5].
@@ -57,19 +57,19 @@ ScheduledNwcExporter/
 
 ## 3. Installation Instructions
 
-To deploy the **Scheduled NWC Export Manager** add-in for Revit 2025:
+To deploy the **Scheduled NWC Export Manager** add-in for Revit 2024:
 
-1. **Build the Solution**: Open `ScheduledNwcExporter.sln` in Visual Studio 2022 (configured with .NET 8 SDK and Revit 2025 API references) and build in **Release** mode.
+1. **Build the Solution**: Open `ScheduledNwcExporter.sln` in Visual Studio 2022. Install the **.NET Framework 4.8 Developer Pack**, ensure **.NET desktop development** is selected, and build in **Release** mode. The project references `C:\Program Files\Autodesk\Revit 2024\RevitAPI.dll` and `RevitAPIUI.dll` by default; pass `/p:RevitInstallPath="<your Revit 2024 folder>"` if Revit is installed elsewhere.
 2. **Deploy Add-in Files**: Copy the compiled output files and manifest into the Revit add-ins directory:
    - **Manifest file (`ScheduledNwcExporter.addin`)**: Place into:
      ```text
-     %appdata%\Autodesk\Revit\Addins\2025\
+     %appdata%\Autodesk\Revit\Addins\2024\
      ```
    - **Assembly folder (`ScheduledNwcExporter\` containing `ScheduledNwcExporter.dll`)**: Place into:
      ```text
-     %appdata%\Autodesk\Revit\Addins\2025\ScheduledNwcExporter\
+     %appdata%\Autodesk\Revit\Addins\2024\ScheduledNwcExporter\
      ```
-3. **Launch Revit 2025**: Upon starting Revit 2025, a new ribbon tab named **BIM Automation** will appear with the **Scheduled NWC Manager** button.
+3. **Launch Revit 2024**: Upon starting Revit 2024, a new ribbon tab named **BIM Automation** will appear with the **Scheduled NWC Manager** button.
 
 ---
 
@@ -90,7 +90,7 @@ Configuration settings, export jobs, and execution logs are stored locally under
 
 ## 5. Execution Flow & Lifecycle
 
-1. **User Launch**: User launches Revit 2025, opens the Export Manager from the Ribbon, and configures jobs and schedule [6].
+1. **User Launch**: User launches Revit 2024, opens the Export Manager from the Ribbon, and configures jobs and schedule [6].
 2. **Trigger**: At the scheduled time (or via "Run Now"), an export session initializes.
 3. **Preflight & Open**: Each model is validated, opened detached (`DetachAndPreserveWorksets`), and all user worksets are verified and opened [7].
 4. **Export**: Navisworks export options (`ExportLinks = false`, shared coordinates) are applied, and `.nwc` files are generated in the target directory.
@@ -103,7 +103,7 @@ Configuration settings, export jobs, and execution logs are stored locally under
 
 | Requirement Category | Status | Notes & Implementation Details |
 | :--- | :--- | :--- |
-| **Revit 2025 & .NET 8** | Implemented | Targets .NET 8 (`net8.0-windows`) and Revit 2025 API assemblies. |
+| **Revit 2024 & .NET Framework 4.8** | Implemented | Targets `.NET Framework 4.8` (`net48`) and Revit 2024 API assemblies. |
 | **Failure Isolation** | Implemented | Try-catch blocks wrap individual job processing; failure in Model B does not halt Model C. |
 | **Workset Verification** | Implemented | `WorksetManager` enumerates user worksets, verifies open states, and opens closed worksets. |
 | **Link Exclusion** | Implemented | `ExportLinks = false` configured in `NavisworksExportOptions`; links inspected and logged. |
