@@ -28,7 +28,7 @@ namespace ScheduledNwcExporter.Core
         {
             var hubsList = new List<Hub>();
             dynamic response = await _hubsApi.GetHubsAsync();
-            string json = response.ToJson();
+            string json = JsonConvert.SerializeObject(response);
             
             var hubsResponse = JsonConvert.DeserializeObject<ForgeResponse<HubAttributes>>(json);
             if (hubsResponse?.data != null)
@@ -49,7 +49,7 @@ namespace ScheduledNwcExporter.Core
         {
             var projectsList = new List<Project>();
             dynamic response = await _projectsApi.GetHubProjectsAsync(hubId);
-            string json = response.ToJson();
+            string json = JsonConvert.SerializeObject(response);
 
             var projectsResponse = JsonConvert.DeserializeObject<ForgeResponse<ProjectAttributes>>(json);
             if (projectsResponse?.data != null)
@@ -70,7 +70,7 @@ namespace ScheduledNwcExporter.Core
         {
             var itemsList = new List<CloudItem>();
             dynamic response = await _projectsApi.GetProjectTopFoldersAsync(hubId, projectId);
-            string json = response.ToJson();
+            string json = JsonConvert.SerializeObject(response);
 
             var foldersResponse = JsonConvert.DeserializeObject<ForgeResponse<FolderAttributes>>(json);
             if (foldersResponse?.data != null)
@@ -92,7 +92,7 @@ namespace ScheduledNwcExporter.Core
         {
             var itemsList = new List<CloudItem>();
             dynamic response = await _foldersApi.GetFolderContentsAsync(projectId, folderId);
-            string json = response.ToJson();
+            string json = JsonConvert.SerializeObject(response);
 
             var contentsResponse = JsonConvert.DeserializeObject<ForgeResponse<FolderAttributes>>(json);
             if (contentsResponse?.data != null)
