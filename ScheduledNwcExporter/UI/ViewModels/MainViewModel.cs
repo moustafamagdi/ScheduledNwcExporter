@@ -22,6 +22,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
     {
         private readonly ConfigurationManager _configManager;
         private readonly ILogger _logger;
+        private readonly Dispatcher _uiDispatcher;
         private readonly ScheduleManager _scheduleManager;
         private readonly ExportQueueExternalEventHandler _queueHandler;
 
@@ -242,6 +243,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
             _configManager = configManager ?? throw new ArgumentNullException(nameof(configManager));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _queueHandler = queueHandler ?? throw new ArgumentNullException(nameof(queueHandler));
+            _uiDispatcher = Dispatcher.CurrentDispatcher;
 
             AppSettings settings = _configManager.CurrentSettings;
             _logger.DebugMode = settings.DebugMode;
