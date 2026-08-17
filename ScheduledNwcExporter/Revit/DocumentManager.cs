@@ -59,15 +59,26 @@ namespace ScheduledNwcExporter.Revit
                 {
                     revitModelPath = ModelPathUtils.ConvertUserVisiblePathToModelPath(modelPath);
                 }
-                var openOptions = new OpenOptions
-                {
-                    DetachFromCentralOption = DetachFromCentralOption.DetachAndPreserveWorksets
-                };
+                var openOptions = new OpenOptions();
 
-                // Worksets must be selected before opening. Revit does not expose an API to open
-                // arbitrary worksets after the document has already been loaded.
-                var worksetConfiguration = new WorksetConfiguration(WorksetConfigurationOption.OpenAllWorksets);
-                openOptions.SetOpenWorksetsConfiguration(worksetConfiguration);
+                if (isCloud)
+                {
+                    // EXPERT FIX: For Cloud Workshared models, we must explicitly set WorksharingOpenOptions
+                    // and open the CENTRAL version directly to avoid "Detached" permission issues.
+                    var wsOptions = new WorksharingOpenOptions();
+                    wsOptions.OpenWorksetsConfiguration = WorksetConfigurationOption.OpenAllWorksets;
+                    
+                    openOptions.SetWorksharingOpenOptions(wsOptions);
+                    openOptions.DetachFromCentralOption = DetachFromCentralOption.DoNotDetach; // Open central directly as ReadOnly
+                }
+                else
+                {
+                    openOptions.DetachFromCentralOption = DetachFromCentralOption.DetachAndPreserveWorksets;
+                    
+                    // Worksets must be selected before opening.
+                    var worksetConfiguration = new WorksetConfiguration(WorksetConfigurationOption.OpenAllWorksets);
+                    openOptions.SetOpenWorksetsConfiguration(worksetConfiguration);
+                }
 
                 // This opens the document without activating it in Revit's user interface.
                 Document doc = app.OpenDocumentFile(revitModelPath, openOptions);
