@@ -123,6 +123,8 @@ namespace ScheduledNwcExporter.UI.ViewModels
                 Job.CloudDisplayPath = cloudDisplayPath.EndsWith(".rvt", StringComparison.OrdinalIgnoreCase)
                     ? cloudDisplayPath
                     : cloudDisplayPath + ".rvt";
+                Job.CloudOpenAccessDenied = false;
+                Job.CloudOpenAccessDeniedAt = null;
                 OnPropertyChanged(nameof(Job));
                 Validate();
             }
@@ -140,6 +142,8 @@ namespace ScheduledNwcExporter.UI.ViewModels
             {
                 Job.SourceModelPath = openFileDialog.FileName;
                 Job.CloudDisplayPath = string.Empty;
+                Job.CloudOpenAccessDenied = false;
+                Job.CloudOpenAccessDeniedAt = null;
                 if (string.IsNullOrEmpty(Job.OutputDirectory))
                 {
                     Job.OutputDirectory = Path.GetDirectoryName(openFileDialog.FileName) ?? string.Empty;

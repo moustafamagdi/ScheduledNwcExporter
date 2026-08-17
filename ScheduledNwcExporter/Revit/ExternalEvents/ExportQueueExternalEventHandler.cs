@@ -42,6 +42,7 @@ namespace ScheduledNwcExporter.Revit.ExternalEvents
     {
         private readonly ILogger _logger;
         private readonly AppSettings _settings;
+        private readonly ConfigurationManager? _configurationManager;
         private readonly Dispatcher _uiDispatcher;
         private readonly List<ModelExportJob> _jobs = new List<ModelExportJob>();
         private readonly ExportSessionSummary _summary = new ExportSessionSummary();
@@ -57,10 +58,11 @@ namespace ScheduledNwcExporter.Revit.ExternalEvents
         public event EventHandler<ExportSessionProgress>? ProgressChanged;
         public event EventHandler<ExportSessionSummary>? SessionCompleted;
 
-        public ExportQueueExternalEventHandler(ILogger logger, AppSettings settings, Dispatcher uiDispatcher)
+        public ExportQueueExternalEventHandler(ILogger logger, AppSettings settings, Dispatcher uiDispatcher, ConfigurationManager? configurationManager = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            _configurationManager = configurationManager;
             _uiDispatcher = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
         }
 
@@ -230,6 +232,10 @@ namespace ScheduledNwcExporter.Revit.ExternalEvents
 
             IsSessionRunning = false;
             _summary.Duration = DateTime.Now - _sessionStartedAt;
+
+            // Queue-side job state changes (including denied cloud access) must survive unattended
+            // runs where the modeless WPF window and its ViewModel are not present.
+            _configurationManager?.SaveConfiguration();
             PublishProgress(string.Empty, string.IsNullOrWhiteSpace(_summary.SessionError) ? "Queue completed." : _summary.SessionError);
             _logger.Info(
                 "Scheduler",

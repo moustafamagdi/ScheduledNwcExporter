@@ -31,7 +31,11 @@ namespace ScheduledNwcExporter.Application
                 Logger = new Logging.FileLogger { DebugMode = ConfigManager.CurrentSettings.DebugMode };
                 
                 // Use current dispatcher (Revit main thread) for the queue handler
-                QueueHandler = new Revit.ExternalEvents.ExportQueueExternalEventHandler(Logger, ConfigManager.CurrentSettings, System.Windows.Threading.Dispatcher.CurrentDispatcher);
+                QueueHandler = new Revit.ExternalEvents.ExportQueueExternalEventHandler(
+                    Logger,
+                    ConfigManager.CurrentSettings,
+                    System.Windows.Threading.Dispatcher.CurrentDispatcher,
+                    ConfigManager);
                 QueueEvent = ExternalEvent.Create(QueueHandler);
                 QueueHandler.AttachExternalEvent(QueueEvent);
 

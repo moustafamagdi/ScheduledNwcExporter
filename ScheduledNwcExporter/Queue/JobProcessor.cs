@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using Autodesk.Revit.DB;
 using ScheduledNwcExporter.Configuration;
+using ScheduledNwcExporter.Core;
 using ScheduledNwcExporter.Logging;
 using ScheduledNwcExporter.Revit;
 
@@ -79,6 +80,15 @@ namespace ScheduledNwcExporter.Queue
                 return CompleteJob(job, result, startedAt, UpdateProgress);
             }
 
+            if (isCloud && job.CloudOpenAccessDenied)
+            {
+                result.Skipped = true;
+                result.ErrorMessage = "Cloud model is blocked after Revit previously denied access. Re-select the cloud model after an administrator grants Revit Cloud Worksharing entitlement and View + Download + Upload + Edit folder permissions.";
+                UpdateProgress(JobStatus.Skipped, "Cloud access blocked", 100);
+                _logger.Warning("Job", result.ErrorMessage, modelName, "CloudAccessPreflight");
+                return CompleteJob(job, result, startedAt, UpdateProgress);
+            }
+
             int maximumAttempts = Math.Max(1, job.RetryCount + 1);
             string lastError = string.Empty;
 
@@ -119,6 +129,7 @@ namespace ScheduledNwcExporter.Queue
                 {
                     UpdateProgress(JobStatus.Processing, "Validating", 5);
                     ValidateJobInputs(job);
+                    ValidateCloudSession(job);
 
                     UpdateProgress(JobStatus.Processing, "Preparing model", 10);
                     preparedModel = _temporaryModelCopyService.Prepare(
@@ -165,6 +176,23 @@ namespace ScheduledNwcExporter.Queue
                     }
 
                     result.Succeeded = true;
+                    break;
+                }
+                catch (CloudModelAccessDeniedException ex)
+                {
+                    lastError = ex.Message;
+                    if (ex.IsPermanentAccessDenial)
+                    {
+                        job.CloudOpenAccessDenied = true;
+                        job.CloudOpenAccessDeniedAt = DateTime.Now;
+                        UpdateProgress(JobStatus.Failed, "Cloud access denied — no retry", 100);
+                        _logger.Error("Job", "Cloud model access was denied by Revit. The job has been blocked from future unattended attempts until the cloud model is re-selected.", modelName, "CloudAccessDenied", ex);
+                    }
+                    else
+                    {
+                        UpdateProgress(JobStatus.Failed, "Autodesk sign-in required", 100);
+                        _logger.Warning("Job", "Cloud preflight stopped this job because no Autodesk session token was available. Revit was not asked to open the model.", modelName, "CloudAccessPreflight", ex);
+                    }
                     break;
                 }
                 catch (Exception ex)
@@ -221,12 +249,18 @@ namespace ScheduledNwcExporter.Queue
             }
             else if (result.Skipped)
             {
-                updateProgress?.Invoke(JobStatus.Skipped, "Skipped", 100);
+                updateProgress?.Invoke(JobStatus.Skipped, string.IsNullOrWhiteSpace(result.ErrorMessage) ? "Skipped" : "Cloud access blocked", 100);
+                job.LastError = result.ErrorMessage;
                 runResult.Status = JobStatus.Skipped;
             }
             else
             {
-                updateProgress?.Invoke(JobStatus.Failed, "Failed", 100);
+                string finalStage = job.CloudOpenAccessDenied
+                    ? "Cloud access denied"
+                    : result.ErrorMessage.IndexOf("session token", StringComparison.OrdinalIgnoreCase) >= 0
+                        ? "Autodesk sign-in required"
+                        : "Failed";
+                updateProgress?.Invoke(JobStatus.Failed, finalStage, 100);
                 job.LastError = result.ErrorMessage;
                 runResult.Status = JobStatus.Failed;
                 _logger.Error("Job", $"Job permanently failed. Reason: {result.ErrorMessage}", result.ModelName, "Failed");
@@ -234,6 +268,23 @@ namespace ScheduledNwcExporter.Queue
 
             job.AddRunResult(runResult);
             return result;
+        }
+
+        private static void ValidateCloudSession(ModelExportJob job)
+        {
+            if (!job.IsCloud) return;
+
+            // This preflight prevents Revit from entering its native cloud-open workflow when the
+            // Autodesk session itself is unavailable. Revit remains the authoritative check for the
+            // separate Cloud Worksharing entitlement and effective folder edit permissions.
+            string token = CloudAuthenticationService.GetAccessToken();
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                throw new CloudModelAccessDeniedException(
+                    "No active Autodesk session token is available. Sign in to Autodesk in Revit before exporting cloud models.",
+                    new InvalidOperationException("Autodesk session token was unavailable."),
+                    isPermanentAccessDenial: false);
+            }
         }
 
         private static void ValidateJobInputs(ModelExportJob job)

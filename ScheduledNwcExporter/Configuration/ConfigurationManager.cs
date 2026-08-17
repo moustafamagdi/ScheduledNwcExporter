@@ -169,6 +169,23 @@ namespace ScheduledNwcExporter.Configuration
             }
         }
 
+        // Set only after Revit explicitly reports that the signed-in user is not authorized to open
+        // this cloud model. It prevents unattended schedules from repeatedly entering Revit's modal
+        // cloud-open workflow. Re-selecting the cloud model clears this safeguard.
+        private bool _cloudOpenAccessDenied;
+        public bool CloudOpenAccessDenied
+        {
+            get => _cloudOpenAccessDenied;
+            set { _cloudOpenAccessDenied = value; OnPropertyChanged(); }
+        }
+
+        private DateTime? _cloudOpenAccessDeniedAt;
+        public DateTime? CloudOpenAccessDeniedAt
+        {
+            get => _cloudOpenAccessDeniedAt;
+            set { _cloudOpenAccessDeniedAt = value; OnPropertyChanged(); }
+        }
+
         private int _retryCount = 1;
         public int RetryCount
         {

@@ -6,6 +6,21 @@ using ScheduledNwcExporter.Logging;
 namespace ScheduledNwcExporter.Revit
 {
     /// <summary>
+    /// Signals that Revit, the authority for cloud-model entitlement, denied the signed-in user.
+    /// The queue must not retry this condition because retrying re-enters Revit's native cloud-open UI.
+    /// </summary>
+    public sealed class CloudModelAccessDeniedException : InvalidOperationException
+    {
+        public bool IsPermanentAccessDenial { get; }
+
+        public CloudModelAccessDeniedException(string message, Exception innerException, bool isPermanentAccessDenial = true)
+            : base(message, innerException)
+        {
+            IsPermanentAccessDenial = isPermanentAccessDenial;
+        }
+    }
+
+    /// <summary>
     /// Opens and closes source models for non-destructive export processing.
     /// </summary>
     public class DocumentManager
@@ -23,10 +38,11 @@ namespace ScheduledNwcExporter.Revit
         /// </summary>
         public Document? OpenModelDetached(Autodesk.Revit.ApplicationServices.Application app, string modelPath)
         {
+            bool isCloud = modelPath.StartsWith("acc://", StringComparison.OrdinalIgnoreCase);
+            string modelName = isCloud ? modelPath.Split('|')[0].Replace("acc://", "") : Path.GetFileName(modelPath);
+
             try
             {
-                bool isCloud = modelPath.StartsWith("acc://", StringComparison.OrdinalIgnoreCase);
-                string modelName = isCloud ? modelPath.Split('|')[0].Replace("acc://", "") : Path.GetFileName(modelPath);
 
                 if (!isCloud && !File.Exists(modelPath))
                 {
@@ -81,10 +97,21 @@ namespace ScheduledNwcExporter.Revit
             }
             catch (Exception ex)
             {
-                string safeModelName = modelPath.StartsWith("acc://", StringComparison.OrdinalIgnoreCase) 
-                    ? modelPath.Split('|')[0].Replace("acc://", "") 
-                    : Path.GetFileName(modelPath);
-                _logger.Error("Revit", $"Failed to open model: {ex.Message}", safeModelName, "OpeningModel", ex);
+                bool accessDenied = isCloud &&
+                    (ex.GetType().Name.IndexOf("Unauthorized", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                     ex.Message.IndexOf("permission", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                     ex.Message.IndexOf("not authorized", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                     ex.Message.IndexOf("entitlement", StringComparison.OrdinalIgnoreCase) >= 0);
+
+                _logger.Error("Revit", $"Failed to open model: {ex.Message}", modelName, "OpeningModel", ex);
+
+                if (accessDenied)
+                {
+                    throw new CloudModelAccessDeniedException(
+                        "Revit denied cloud-model access. Verify that the signed-in Autodesk user has a valid Revit Cloud Worksharing entitlement and View + Download + Upload + Edit permissions on the model folder.",
+                        ex);
+                }
+
                 return null;
             }
         }
