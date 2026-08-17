@@ -53,8 +53,32 @@ namespace ScheduledNwcExporter.Configuration
                 try
                 {
                     if (string.IsNullOrWhiteSpace(_sourceModelPath)) return "Model.nwc";
-                    string modelFileName = Path.GetFileName(_sourceModelPath);
-                    string modelName = Path.GetFileNameWithoutExtension(modelFileName);
+                    
+                    string modelName = "Model";
+                    string modelFileName = "Model.rvt";
+
+                    if (_sourceModelPath.StartsWith("acc://", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Format: acc://ModelName.rvt|URN
+                        string temp = _sourceModelPath.Substring(6); // Remove acc://
+                        int pipeIndex = temp.IndexOf('|');
+                        if (pipeIndex > 0)
+                        {
+                            modelFileName = temp.Substring(0, pipeIndex);
+                            modelName = Path.GetFileNameWithoutExtension(modelFileName);
+                        }
+                        else
+                        {
+                            modelFileName = temp;
+                            modelName = Path.GetFileNameWithoutExtension(temp);
+                        }
+                    }
+                    else
+                    {
+                        modelFileName = Path.GetFileName(_sourceModelPath);
+                        modelName = Path.GetFileNameWithoutExtension(modelFileName);
+                    }
+
                     DateTime now = DateTime.Now;
                     string resolved = _outputFileNameTemplate
                         .Replace("{ModelName}", modelName)
