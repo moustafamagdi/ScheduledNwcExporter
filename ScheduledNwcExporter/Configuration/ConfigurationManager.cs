@@ -46,6 +46,9 @@ namespace ScheduledNwcExporter.Configuration
         }
 
         [JsonIgnore]
+        public bool IsCloud => _sourceModelPath.StartsWith("acc://", StringComparison.OrdinalIgnoreCase);
+
+        [JsonIgnore]
         public string ResolvedOutputFilename
         {
             get

@@ -6,6 +6,7 @@
         WindowStartupLocation="CenterScreen" Background="#FFF5F5F5">
     <Window.Resources>
         <local:BoolToColorConverter x:Key="BoolToColorConverter" />
+        <local:BoolToCloudIconConverter x:Key="BoolToCloudIconConverter" />
         <local:StatusToBackgroundConverter x:Key="StatusToBackgroundConverter" />
     </Window.Resources>
 
@@ -59,6 +60,14 @@
                         </Style>
                     </DataGrid.RowStyle>
                     <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="Loc" Width="40">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding IsCloud, Converter={StaticResource BoolToCloudIconConverter}}" 
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="14"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                         <DataGridCheckBoxColumn Header="Enabled" Binding="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}" Width="60">
                             <DataGridCheckBoxColumn.ElementStyle>
                                 <Style TargetType="CheckBox">
