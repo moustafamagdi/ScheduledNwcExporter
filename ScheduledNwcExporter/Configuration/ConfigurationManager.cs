@@ -19,6 +19,14 @@ namespace ScheduledNwcExporter.Configuration
         Retrying
     }
 
+    public class RunResult
+    {
+        public DateTime Timestamp { get; set; }
+        public JobStatus Status { get; set; }
+        public string Duration { get; set; } = string.Empty;
+        public string ErrorMessage { get; set; } = string.Empty;
+    }
+
     public class ModelExportJob : INotifyPropertyChanged
     {
         private string _id = Guid.NewGuid().ToString();
@@ -176,6 +184,24 @@ namespace ScheduledNwcExporter.Configuration
         {
             get => _lastError;
             set { _lastError = value; OnPropertyChanged(); }
+        }
+
+        private List<RunResult> _runHistory = new List<RunResult>();
+        public List<RunResult> RunHistory
+        {
+            get => _runHistory;
+            set { _runHistory = value; OnPropertyChanged(); }
+        }
+
+        public void AddRunResult(RunResult result)
+        {
+            if (_runHistory == null) _runHistory = new List<RunResult>();
+            _runHistory.Insert(0, result);
+            if (_runHistory.Count > 10)
+            {
+                _runHistory.RemoveAt(_runHistory.Count - 1);
+            }
+            OnPropertyChanged(nameof(RunHistory));
         }
 
         // Compatibility property for older JSON configs

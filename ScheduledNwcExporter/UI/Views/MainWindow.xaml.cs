@@ -212,4 +212,38 @@ namespace ScheduledNwcExporter.UI.Views
             throw new NotSupportedException();
         }
     }
+
+    public class RunHistoryConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        {
+            if (value is List<RunResult> history && history.Count > 0)
+            {
+                var sb = new StringBuilder();
+                sb.AppendLine("Recent Run History:");
+                foreach (var run in history.Take(5))
+                {
+                    string statusIcon = run.Status switch
+                    {
+                        JobStatus.Success => "✅",
+                        JobStatus.Failed => "❌",
+                        JobStatus.Cancelled => "⏹",
+                        _ => "⚪"
+                    };
+                    sb.AppendLine($"{statusIcon} {run.Timestamp:MM-dd HH:mm} - {run.Status} ({run.Duration})");
+                    if (!string.IsNullOrEmpty(run.ErrorMessage))
+                    {
+                        sb.AppendLine($"   Error: {run.ErrorMessage}");
+                    }
+                }
+                return sb.ToString().TrimEnd();
+            }
+            return "No run history available.";
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        {
+            throw new NotSupportedException();
+        }
+    }
 }

@@ -197,31 +197,42 @@ namespace ScheduledNwcExporter.Queue
         {
             result.Duration = DateTime.Now - startedAt;
             job.LastRun = DateTime.Now;
-            // job.LastDuration = result.Duration.ToString(@"hh\:mm\:ss"); // Assuming LastDuration exists or was part of a previous version
+
+            var runResult = new RunResult
+            {
+                Timestamp = job.LastRun.Value,
+                Duration = result.Duration.ToString(@"hh\:mm\:ss"),
+                ErrorMessage = result.ErrorMessage
+            };
 
             if (result.Succeeded)
             {
                 updateProgress?.Invoke(JobStatus.Success, "Success", 100);
                 job.LastError = string.Empty;
-                _logger.Success("Job", $"Job completed in {result.Duration:hh\\:mm\\:ss}.", result.ModelName, "Completed");
+                runResult.Status = JobStatus.Success;
+                _logger.Success("Job", $"Job completed in {runResult.Duration}.", result.ModelName, "Completed");
             }
             else if (result.Cancelled)
             {
                 updateProgress?.Invoke(JobStatus.Cancelled, "Cancelled", 100);
                 job.LastError = result.ErrorMessage;
+                runResult.Status = JobStatus.Cancelled;
                 _logger.Warning("Job", "Job cancelled at a safe boundary.", result.ModelName, "Cancelled");
             }
             else if (result.Skipped)
             {
                 updateProgress?.Invoke(JobStatus.Skipped, "Skipped", 100);
+                runResult.Status = JobStatus.Skipped;
             }
             else
             {
                 updateProgress?.Invoke(JobStatus.Failed, "Failed", 100);
                 job.LastError = result.ErrorMessage;
+                runResult.Status = JobStatus.Failed;
                 _logger.Error("Job", $"Job permanently failed. Reason: {result.ErrorMessage}", result.ModelName, "Failed");
             }
 
+            job.AddRunResult(runResult);
             return result;
         }
 

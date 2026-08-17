@@ -9,6 +9,7 @@
         <local:BoolToColorConverter x:Key="BoolToColorConverter" />
         <local:BoolToCloudIconConverter x:Key="BoolToCloudIconConverter" />
         <local:StatusToBackgroundConverter x:Key="StatusToBackgroundConverter" />
+        <local:RunHistoryConverter x:Key="RunHistoryConverter" />
     </Window.Resources>
 
     <Grid Margin="15">
@@ -94,7 +95,14 @@
                         <DataGridTextColumn Header="Source Model" Binding="{Binding SourceModelPath}" Width="220" IsReadOnly="True"/>
                         <DataGridTextColumn Header="Output Folder" Binding="{Binding OutputDirectory}" Width="140" IsReadOnly="True"/>
                         <DataGridTextColumn Header="Output Filename" Binding="{Binding ResolvedOutputFilename}" Width="150" IsReadOnly="True"/>
-                        <DataGridTextColumn Header="Status" Binding="{Binding StatusText}" Width="85" IsReadOnly="True"/>
+                        <DataGridTemplateColumn Header="Status" Width="85">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" HorizontalAlignment="Left"
+                                               ToolTip="{Binding RunHistory, Converter={StaticResource RunHistoryConverter}}"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                         <DataGridTemplateColumn Header="Progress" Width="100">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>

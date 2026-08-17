@@ -460,11 +460,18 @@ namespace ScheduledNwcExporter.UI.ViewModels
         {
             try
             {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(_logger.LogFilePath) { UseShellExecute = true });
+                if (File.Exists(_logger.LogFilePath))
+                {
+                    new Views.LogViewerWindow(_logger.LogFilePath).Show();
+                }
+                else
+                {
+                    MessageBox.Show("Log file does not exist yet.", "Hatco NWC Exporter", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Could not open the log file: {ex.Message}", "Scheduled NWC Export Manager", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Could not open the log file: {ex.Message}", "Hatco NWC Exporter", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 

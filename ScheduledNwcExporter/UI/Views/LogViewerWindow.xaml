@@ -1,0 +1,70 @@
+<Window x:Class="ScheduledNwcExporter.UI.Views.LogViewerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="In-App Log Viewer" Height="600" Width="900"
+        WindowStartupLocation="CenterOwner" Background="#FFF5F5F5">
+    <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Application Logs" FontSize="18" FontWeight="Bold" Margin="0,0,0,4"/>
+        
+        <Grid Grid.Row="1" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="120"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            
+            <TextBlock Text="Level:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <ComboBox Grid.Column="1" ItemsSource="{Binding Levels}" SelectedItem="{Binding LevelFilter}" Height="26"/>
+            
+            <TextBlock Grid.Column="2" Text="Search:" VerticalAlignment="Center" Margin="15,0,8,0"/>
+            <TextBox Grid.Column="3" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Height="26" VerticalContentAlignment="Center"/>
+            
+            <Button Grid.Column="4" Content=" Refresh " Command="{Binding RefreshCommand}" Width="80" Height="26" Margin="10,0,0,0"/>
+        </Grid>
+
+        <DataGrid Grid.Row="2" ItemsSource="{Binding LogViewSource.View}" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True" Background="White" FontSize="11">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Time" Binding="{Binding Timestamp, StringFormat={}{0:HH:mm:ss.fff}}" Width="90"/>
+                <DataGridTextColumn Header="Level" Binding="{Binding Level}" Width="70">
+                    <DataGridTextColumn.CellStyle>
+                        <Style TargetType="DataGridCell">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Level}" Value="ERROR">
+                                    <Setter Property="Foreground" Value="Red"/>
+                                    <Setter Property="FontWeight" Value="Bold"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Level}" Value="FATAL">
+                                    <Setter Property="Foreground" Value="DarkRed"/>
+                                    <Setter Property="FontWeight" Value="Bold"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Level}" Value="SUCCESS">
+                                    <Setter Property="Foreground" Value="Green"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Level}" Value="WARNING">
+                                    <Setter Property="Foreground" Value="Orange"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </DataGridTextColumn.CellStyle>
+                </DataGridTextColumn>
+                <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="80"/>
+                <DataGridTextColumn Header="Model" Binding="{Binding Model}" Width="120"/>
+                <DataGridTextColumn Header="Stage" Binding="{Binding Stage}" Width="100"/>
+                <DataGridTextColumn Header="Message" Binding="{Binding Message}" Width="*"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
+            <Button Content=" Close " Click="CloseButton_Click" Width="80" Height="30"/>
+        </StackPanel>
+    </Grid>
+</Window>
