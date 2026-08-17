@@ -24,38 +24,58 @@ namespace ScheduledNwcExporter.Core
 
         public async Task<List<Hub>> GetHubsAsync()
         {
-            var hubs = new List<Hub>();
-            dynamic response = await _hubsApi.GetHubsAsync();
-            foreach (var hub in response.Data)
+            var hubsList = new List<Hub>();
+            // Use concrete Hubs type instead of dynamic
+            Hubs response = await _hubsApi.GetHubsAsync();
+            if (response?.Data != null)
             {
-                hubs.Add(new Hub { Id = hub.Id, Name = hub.Attributes.Name });
+                foreach (var hubData in response.Data)
+                {
+                    hubsList.Add(new Hub 
+                    { 
+                        Id = hubData.Id, 
+                        Name = hubData.Attributes?.Name ?? "Unknown Hub" 
+                    });
+                }
             }
-            return hubs;
+            return hubsList;
         }
 
         public async Task<List<Project>> GetProjectsAsync(string hubId)
         {
-            var projects = new List<Project>();
-            dynamic response = await _projectsApi.GetHubProjectsAsync(hubId);
-            foreach (var project in response.Data)
+            var projectsList = new List<Project>();
+            // Use concrete Projects type
+            Projects response = await _projectsApi.GetHubProjectsAsync(hubId);
+            if (response?.Data != null)
             {
-                projects.Add(new Project { Id = project.Id, Name = project.Attributes.Name });
+                foreach (var projectData in response.Data)
+                {
+                    projectsList.Add(new Project 
+                    { 
+                        Id = projectData.Id, 
+                        Name = projectData.Attributes?.Name ?? "Unknown Project" 
+                    });
+                }
             }
-            return projects;
+            return projectsList;
         }
 
         public async Task<List<CloudItem>> GetTopFoldersAsync(string hubId, string projectId)
         {
             var items = new List<CloudItem>();
-            dynamic response = await _projectsApi.GetProjectTopFoldersAsync(hubId, projectId);
-            foreach (var folder in response.Data)
+            // Top folders can be retrieved using GetProjectTopFoldersAsync
+            TopFolders response = await _projectsApi.GetProjectTopFoldersAsync(hubId, projectId);
+            if (response?.Data != null)
             {
-                items.Add(new CloudItem 
-                { 
-                    Id = folder.Id, 
-                    Name = folder.Attributes.DisplayName, 
-                    Type = CloudItemType.Folder 
-                });
+                foreach (var folderData in response.Data)
+                {
+                    items.Add(new CloudItem 
+                    { 
+                        Id = folderData.Id, 
+                        Name = folderData.Attributes?.DisplayName ?? "Unknown Folder", 
+                        Type = CloudItemType.Folder 
+                    });
+                }
             }
             return items;
         }
@@ -63,25 +83,31 @@ namespace ScheduledNwcExporter.Core
         public async Task<List<CloudItem>> GetFolderContentsAsync(string projectId, string folderId)
         {
             var items = new List<CloudItem>();
-            dynamic response = await _foldersApi.GetFolderContentsAsync(projectId, folderId);
-            foreach (var item in response.Data)
+            // Folder contents use JsonApiCollection
+            JsonApiCollection response = await _foldersApi.GetFolderContentsAsync(projectId, folderId);
+            if (response?.Data != null)
             {
-                string type = item.Type;
-                string displayName = item.Attributes.DisplayName;
-                
-                if (type == "folders")
+                foreach (var item in response.Data)
                 {
-                    items.Add(new CloudItem { Id = item.Id, Name = displayName, Type = CloudItemType.Folder });
-                }
-                else if (type == "items" && displayName.EndsWith(".rvt", StringComparison.OrdinalIgnoreCase))
-                {
-                    items.Add(new CloudItem 
-                    { 
-                        Id = item.Id, 
-                        Name = displayName, 
-                        Type = CloudItemType.File,
-                        VersionId = item.Relationships.Tip.Data.Id
-                    });
+                    // In Forge SDK, item is usually a dynamic object within the collection Data list
+                    // but we can access properties safely.
+                    string type = item.Type;
+                    string displayName = item.Attributes?.DisplayName;
+                    
+                    if (type == "folders")
+                    {
+                        items.Add(new CloudItem { Id = item.Id, Name = displayName, Type = CloudItemType.Folder });
+                    }
+                    else if (type == "items" && !string.IsNullOrEmpty(displayName) && displayName.EndsWith(".rvt", StringComparison.OrdinalIgnoreCase))
+                    {
+                        items.Add(new CloudItem 
+                        { 
+                            Id = item.Id, 
+                            Name = displayName, 
+                            Type = CloudItemType.File,
+                            VersionId = item.Relationships?.Tip?.Data?.Id
+                        });
+                    }
                 }
             }
             return items;

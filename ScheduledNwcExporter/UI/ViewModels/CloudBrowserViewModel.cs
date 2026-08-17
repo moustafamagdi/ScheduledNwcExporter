@@ -67,11 +67,17 @@ namespace ScheduledNwcExporter.UI.ViewModels
             try
             {
                 var hubs = await _apsClient.GetHubsAsync();
+                if (hubs.Count == 0)
+                {
+                    _logger.Warning("CloudBrowser", "No hubs found for the current user.");
+                }
+
                 foreach (var hub in hubs)
                 {
                     var hubNode = new CloudNode(hub.Name, CloudItemType.Folder, hub.Id, null)
                     {
                         IsHub = true,
+                        HubId = hub.Id,
                         ApsClient = _apsClient
                     };
                     // Add a dummy child to show the expander
@@ -81,7 +87,8 @@ namespace ScheduledNwcExporter.UI.ViewModels
             }
             catch (Exception ex)
             {
-                _logger.Error("CloudBrowser", $"Failed to load hubs: {ex.Message}");
+                _logger.Error("CloudBrowser", $"Critical error loading hubs: {ex.Message}", string.Empty, "CloudAuth", ex);
+                System.Windows.MessageBox.Show($"Failed to connect to Autodesk Cloud:\n{ex.Message}", "Hatco Cloud Explorer", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
             }
             finally
             {
