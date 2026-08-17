@@ -101,11 +101,25 @@ namespace ScheduledNwcExporter.UI.ViewModels
             }
         }
 
+        private bool _convertElementProperties;
+        public bool ConvertElementProperties
+        {
+            get => _convertElementProperties;
+            set { if (SetProperty(ref _convertElementProperties, value)) { _configManager.CurrentSettings.Export.ConvertElementProperties = value; _configManager.SaveConfiguration(); } }
+        }
+
         private bool _divideFileIntoLevels;
         public bool DivideFileIntoLevels
         {
             get => _divideFileIntoLevels;
             set { if (SetProperty(ref _divideFileIntoLevels, value)) { _configManager.CurrentSettings.Export.DivideFileIntoLevels = value; _configManager.SaveConfiguration(); } }
+        }
+
+        private bool _exportElementIds;
+        public bool ExportElementIds
+        {
+            get => _exportElementIds;
+            set { if (SetProperty(ref _exportElementIds, value)) { _configManager.CurrentSettings.Export.ExportElementIds = value; _configManager.SaveConfiguration(); } }
         }
 
         private bool _exportParts;
@@ -115,32 +129,11 @@ namespace ScheduledNwcExporter.UI.ViewModels
             set { if (SetProperty(ref _exportParts, value)) { _configManager.CurrentSettings.Export.ExportParts = value; _configManager.SaveConfiguration(); } }
         }
 
-        private double _facetingFactor = 1.0;
-        public double FacetingFactor
+        private bool _exportInternalCoordinates;
+        public bool ExportInternalCoordinates
         {
-            get => _facetingFactor;
-            set { if (SetProperty(ref _facetingFactor, value)) { _configManager.CurrentSettings.Export.FacetingFactor = value; _configManager.SaveConfiguration(); } }
-        }
-
-        private string _parameterExportMode = "All";
-        public string ParameterExportMode
-        {
-            get => _parameterExportMode;
-            set { if (SetProperty(ref _parameterExportMode, value)) { _configManager.CurrentSettings.Export.ParameterExportMode = value; _configManager.SaveConfiguration(); } }
-        }
-
-        private bool _exportUrls;
-        public bool ExportUrls
-        {
-            get => _exportUrls;
-            set { if (SetProperty(ref _exportUrls, value)) { _configManager.CurrentSettings.Export.ExportUrls = value; _configManager.SaveConfiguration(); } }
-        }
-
-        private bool _exportRoomAsAttribute;
-        public bool ExportRoomAsAttribute
-        {
-            get => _exportRoomAsAttribute;
-            set { if (SetProperty(ref _exportRoomAsAttribute, value)) { _configManager.CurrentSettings.Export.ExportRoomAsAttribute = value; _configManager.SaveConfiguration(); } }
+            get => _exportInternalCoordinates;
+            set { if (SetProperty(ref _exportInternalCoordinates, value)) { _configManager.CurrentSettings.Export.ExportInternalCoordinates = value; _configManager.SaveConfiguration(); } }
         }
 
         private bool _convertLights;
@@ -150,6 +143,27 @@ namespace ScheduledNwcExporter.UI.ViewModels
             set { if (SetProperty(ref _convertLights, value)) { _configManager.CurrentSettings.Export.ConvertLights = value; _configManager.SaveConfiguration(); } }
         }
 
+        private bool _exportRoomAsAttribute;
+        public bool ExportRoomAsAttribute
+        {
+            get => _exportRoomAsAttribute;
+            set { if (SetProperty(ref _exportRoomAsAttribute, value)) { _configManager.CurrentSettings.Export.ExportRoomAsAttribute = value; _configManager.SaveConfiguration(); } }
+        }
+
+        private bool _exportRoomGeometry;
+        public bool ExportRoomGeometry
+        {
+            get => _exportRoomGeometry;
+            set { if (SetProperty(ref _exportRoomGeometry, value)) { _configManager.CurrentSettings.Export.ExportRoomGeometry = value; _configManager.SaveConfiguration(); } }
+        }
+
+        private bool _exportUrls;
+        public bool ExportUrls
+        {
+            get => _exportUrls;
+            set { if (SetProperty(ref _exportUrls, value)) { _configManager.CurrentSettings.Export.ExportUrls = value; _configManager.SaveConfiguration(); } }
+        }
+
         private bool _findMissingMaterials;
         public bool FindMissingMaterials
         {
@@ -157,18 +171,25 @@ namespace ScheduledNwcExporter.UI.ViewModels
             set { if (SetProperty(ref _findMissingMaterials, value)) { _configManager.CurrentSettings.Export.FindMissingMaterials = value; _configManager.SaveConfiguration(); } }
         }
 
-        private string _coordinates = "Shared";
-        public string Coordinates
+        private bool _exportAllParameters;
+        public bool ExportAllParameters
         {
-            get => _coordinates;
-            set
-            {
-                if (SetProperty(ref _coordinates, value))
-                {
-                    _configManager.CurrentSettings.Export.Coordinates = value;
-                    _configManager.SaveConfiguration();
-                }
-            }
+            get => _exportAllParameters;
+            set { if (SetProperty(ref _exportAllParameters, value)) { _configManager.CurrentSettings.Export.ExportAllParameters = value; _configManager.SaveConfiguration(); } }
+        }
+
+        private bool _exportElementParameters;
+        public bool ExportElementParameters
+        {
+            get => _exportElementParameters;
+            set { if (SetProperty(ref _exportElementParameters, value)) { _configManager.CurrentSettings.Export.ExportElementParameters = value; _configManager.SaveConfiguration(); } }
+        }
+
+        private double _facetingFactor = 1.0;
+        public double FacetingFactor
+        {
+            get => _facetingFactor;
+            set { if (SetProperty(ref _facetingFactor, value)) { _configManager.CurrentSettings.Export.FacetingFactor = value; _configManager.SaveConfiguration(); } }
         }
 
         private string _overwritePolicy = "Overwrite";
@@ -258,18 +279,23 @@ namespace ScheduledNwcExporter.UI.ViewModels
             _logger.DebugMode = settings.DebugMode;
             _isSchedulerEnabled = settings.Scheduler.IsSchedulerEnabled;
             _scheduledTimeString = $"{settings.Scheduler.ScheduledHour:D2}:{settings.Scheduler.ScheduledMinute:D2}";
-            _exportLinks = settings.Export.ExportLinks;
-            _useTemporaryCopyWithoutRevitLinks = settings.Export.UseTemporaryCopyWithoutRevitLinks;
+            
+            // Initialize Export Settings
+            _convertElementProperties = settings.Export.ConvertElementProperties;
             _divideFileIntoLevels = settings.Export.DivideFileIntoLevels;
+            _exportElementIds = settings.Export.ExportElementIds;
             _exportParts = settings.Export.ExportParts;
-            _facetingFactor = settings.Export.FacetingFactor;
-            _parameterExportMode = settings.Export.ParameterExportMode;
-            _exportUrls = settings.Export.ExportUrls;
-            _exportRoomAsAttribute = settings.Export.ExportRoomAsAttribute;
+            _exportInternalCoordinates = settings.Export.ExportInternalCoordinates;
             _convertLights = settings.Export.ConvertLights;
+            _exportRoomAsAttribute = settings.Export.ExportRoomAsAttribute;
+            _exportRoomGeometry = settings.Export.ExportRoomGeometry;
+            _exportUrls = settings.Export.ExportUrls;
             _findMissingMaterials = settings.Export.FindMissingMaterials;
-            _coordinates = settings.Export.Coordinates;
+            _exportAllParameters = settings.Export.ExportAllParameters;
+            _exportElementParameters = settings.Export.ExportElementParameters;
+            _facetingFactor = settings.Export.FacetingFactor;
             _overwritePolicy = settings.Export.OverwritePolicy;
+            _useTemporaryCopyWithoutRevitLinks = settings.Export.UseTemporaryCopyWithoutRevitLinks;
             foreach (var job in settings.Jobs)
             {
                 // Reset status on startup so they appear clean without success colors until run

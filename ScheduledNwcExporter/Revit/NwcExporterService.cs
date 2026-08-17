@@ -73,7 +73,8 @@ namespace ScheduledNwcExporter.Revit
 
                 var exportOptions = new NavisworksExportOptions
                 {
-                    ExportLinks = settings.ExportLinks,
+                    ConvertElementProperties = settings.ConvertElementProperties,
+                    ExportLinks = false, // Explicitly disabled as per user request
                     ExportElementIds = settings.ExportElementIds,
                     ExportRoomGeometry = settings.ExportRoomGeometry,
                     DivideFileIntoLevels = settings.DivideFileIntoLevels,
@@ -83,16 +84,14 @@ namespace ScheduledNwcExporter.Revit
                     ExportRoomAsAttribute = settings.ExportRoomAsAttribute,
                     ConvertLights = settings.ConvertLights,
                     FindMissingMaterials = settings.FindMissingMaterials,
-                    Coordinates = string.Equals(settings.Coordinates, "Shared", StringComparison.OrdinalIgnoreCase)
-                        ? NavisworksCoordinates.Shared
-                        : NavisworksCoordinates.Internal
+                    Coordinates = settings.ExportInternalCoordinates ? NavisworksCoordinates.Internal : NavisworksCoordinates.Shared
                 };
 
-                if (string.Equals(settings.ParameterExportMode, "All", StringComparison.OrdinalIgnoreCase))
+                if (settings.ExportAllParameters)
                 {
                     exportOptions.Parameters = NavisworksParameters.All;
                 }
-                else if (string.Equals(settings.ParameterExportMode, "Elements", StringComparison.OrdinalIgnoreCase))
+                else if (settings.ExportElementParameters)
                 {
                     exportOptions.Parameters = NavisworksParameters.Elements;
                 }

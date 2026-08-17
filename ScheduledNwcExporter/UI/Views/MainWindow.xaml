@@ -157,14 +157,7 @@
                     <StackPanel Grid.Column="1" Margin="10,0,0,0">
                         <TextBlock Text="Basic Export Behavior" FontWeight="Bold" Margin="0,0,0,6"/>
                         <CheckBox Content="Performance Mode (temporary no-link copy)" IsChecked="{Binding UseTemporaryCopyWithoutRevitLinks}" Margin="0,0,0,6"/>
-                        <CheckBox Content="Export Revit Links (disabled by default)" IsChecked="{Binding ExportLinks}" Margin="0,0,0,6"/>
-                        <StackPanel Orientation="Horizontal" Margin="0,4,0,6">
-                            <TextBlock Text="Coordinates:" Width="110" VerticalAlignment="Center"/>
-                            <ComboBox SelectedValue="{Binding Coordinates}" SelectedValuePath="Content" Width="160" Height="24">
-                                <ComboBoxItem Content="Shared"/>
-                                <ComboBoxItem Content="Internal"/>
-                            </ComboBox>
-                        </StackPanel>
+                        
                         <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                             <TextBlock Text="Overwrite Policy:" Width="110" VerticalAlignment="Center"/>
                             <ComboBox SelectedValue="{Binding OverwritePolicy}" SelectedValuePath="Content" Width="160" Height="24">
@@ -173,6 +166,7 @@
                                 <ComboBoxItem Content="TimestampedCopy"/>
                             </ComboBox>
                         </StackPanel>
+                        <TextBlock Text="Advanced export settings (coordinates, parameters, etc.) are available in the next tab." FontSize="10" Foreground="Gray" Margin="0,15,0,0" TextWrapping="Wrap"/>
                     </StackPanel>
                 </Grid>
             </TabItem>
@@ -187,23 +181,21 @@
                         </Grid.ColumnDefinitions>
 
                         <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                            <CheckBox Content="Convert Element Properties" IsChecked="{Binding ConvertElementProperties}" Margin="0,0,0,6"/>
                             <CheckBox Content="Divide File Into Levels" IsChecked="{Binding DivideFileIntoLevels}" Margin="0,0,0,6"/>
+                            <CheckBox Content="Export Element Ids" IsChecked="{Binding ExportElementIds}" Margin="0,0,0,6"/>
                             <CheckBox Content="Export Parts" IsChecked="{Binding ExportParts}" Margin="0,0,0,6"/>
-                            <CheckBox Content="Export URLs" IsChecked="{Binding ExportUrls}" Margin="0,0,0,6"/>
-                            <CheckBox Content="Export Room As Attribute" IsChecked="{Binding ExportRoomAsAttribute}" Margin="0,0,0,6"/>
+                            <CheckBox Content="Export Internal Coordinates" IsChecked="{Binding ExportInternalCoordinates}" Margin="0,0,0,6"/>
+                            <CheckBox Content="Convert Lights (Revit 2020+)" IsChecked="{Binding ConvertLights}" Margin="0,0,0,6"/>
                         </StackPanel>
 
                         <StackPanel Grid.Column="1" Margin="10,0,0,0">
-                            <CheckBox Content="Convert Lights" IsChecked="{Binding ConvertLights}" Margin="0,0,0,6"/>
+                            <CheckBox Content="Export Room As Attribute" IsChecked="{Binding ExportRoomAsAttribute}" Margin="0,0,0,6"/>
+                            <CheckBox Content="Export Room Geometry" IsChecked="{Binding ExportRoomGeometry}" Margin="0,0,0,6"/>
+                            <CheckBox Content="Export URLs" IsChecked="{Binding ExportUrls}" Margin="0,0,0,6"/>
                             <CheckBox Content="Find Missing Materials" IsChecked="{Binding FindMissingMaterials}" Margin="0,0,0,6"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,4,0,6">
-                                <TextBlock Text="Parameters:" Width="110" VerticalAlignment="Center"/>
-                                <ComboBox SelectedValue="{Binding ParameterExportMode}" SelectedValuePath="Content" Width="150" Height="24">
-                                    <ComboBoxItem Content="All"/>
-                                    <ComboBoxItem Content="Elements"/>
-                                    <ComboBoxItem Content="None"/>
-                                </ComboBox>
-                            </StackPanel>
+                            <CheckBox Content="Export All Parameters" IsChecked="{Binding ExportAllParameters}" Margin="0,0,0,6"/>
+                            <CheckBox Content="Export Element Parameters" IsChecked="{Binding ExportElementParameters}" Margin="0,0,0,6"/>
                             <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                                 <TextBlock Text="Faceting Factor:" Width="110" VerticalAlignment="Center"/>
                                 <TextBox Text="{Binding FacetingFactor}" Width="80" Height="24" VerticalContentAlignment="Center"/>

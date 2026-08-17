@@ -227,50 +227,51 @@ namespace ScheduledNwcExporter.Configuration
 
     public class ExportSettings : INotifyPropertyChanged
     {
-        private bool _exportLinks = false;
-        public bool ExportLinks { get => _exportLinks; set { _exportLinks = value; OnPropertyChanged(); } }
-
-        private string _exportScope = "View";
-        public string ExportScope { get => _exportScope; set { _exportScope = value; OnPropertyChanged(); } }
-
-        private string _coordinates = "Shared";
-        public string Coordinates { get => _coordinates; set { _coordinates = value; OnPropertyChanged(); } }
-
-        private string _overwritePolicy = "Overwrite";
-        public string OverwritePolicy { get => _overwritePolicy; set { _overwritePolicy = value; OnPropertyChanged(); } }
-
-        private bool _exportElementIds = true;
-        public bool ExportElementIds { get => _exportElementIds; set { _exportElementIds = value; OnPropertyChanged(); } }
-
-        private bool _exportRoomGeometry = true;
-        public bool ExportRoomGeometry { get => _exportRoomGeometry; set { _exportRoomGeometry = value; OnPropertyChanged(); } }
-
-        private bool _useTemporaryCopyWithoutRevitLinks = true;
-        public bool UseTemporaryCopyWithoutRevitLinks { get => _useTemporaryCopyWithoutRevitLinks; set { _useTemporaryCopyWithoutRevitLinks = value; OnPropertyChanged(); } }
+        private bool _convertElementProperties = true;
+        public bool ConvertElementProperties { get => _convertElementProperties; set { _convertElementProperties = value; OnPropertyChanged(); } }
 
         private bool _divideFileIntoLevels = false;
         public bool DivideFileIntoLevels { get => _divideFileIntoLevels; set { _divideFileIntoLevels = value; OnPropertyChanged(); } }
 
+        private bool _exportElementIds = true;
+        public bool ExportElementIds { get => _exportElementIds; set { _exportElementIds = value; OnPropertyChanged(); } }
+
         private bool _exportParts = false;
         public bool ExportParts { get => _exportParts; set { _exportParts = value; OnPropertyChanged(); } }
 
-        private double _facetingFactor = 1.0;
-        public double FacetingFactor { get => _facetingFactor; set { _facetingFactor = value; OnPropertyChanged(); } }
-
-        private string _parameterExportMode = "All";
-        public string ParameterExportMode { get => _parameterExportMode; set { _parameterExportMode = value; OnPropertyChanged(); } }
-
-        private bool _exportUrls = false;
-        public bool ExportUrls { get => _exportUrls; set { _exportUrls = value; OnPropertyChanged(); } }
-
-        private bool _exportRoomAsAttribute = false;
-        public bool ExportRoomAsAttribute { get => _exportRoomAsAttribute; set { _exportRoomAsAttribute = value; OnPropertyChanged(); } }
+        private bool _exportInternalCoordinates = false;
+        public bool ExportInternalCoordinates { get => _exportInternalCoordinates; set { _exportInternalCoordinates = value; OnPropertyChanged(); } }
 
         private bool _convertLights = false;
         public bool ConvertLights { get => _convertLights; set { _convertLights = value; OnPropertyChanged(); } }
 
+        private bool _exportRoomAsAttribute = false;
+        public bool ExportRoomAsAttribute { get => _exportRoomAsAttribute; set { _exportRoomAsAttribute = value; OnPropertyChanged(); } }
+
+        private bool _exportRoomGeometry = false;
+        public bool ExportRoomGeometry { get => _exportRoomGeometry; set { _exportRoomGeometry = value; OnPropertyChanged(); } }
+
+        private bool _exportUrls = false;
+        public bool ExportUrls { get => _exportUrls; set { _exportUrls = value; OnPropertyChanged(); } }
+
         private bool _findMissingMaterials = false;
         public bool FindMissingMaterials { get => _findMissingMaterials; set { _findMissingMaterials = value; OnPropertyChanged(); } }
+
+        private bool _exportAllParameters = true;
+        public bool ExportAllParameters { get => _exportAllParameters; set { _exportAllParameters = value; OnPropertyChanged(); } }
+
+        private bool _exportElementParameters = false;
+        public bool ExportElementParameters { get => _exportElementParameters; set { _exportElementParameters = value; OnPropertyChanged(); } }
+
+        private double _facetingFactor = 1.0;
+        public double FacetingFactor { get => _facetingFactor; set { _facetingFactor = value; OnPropertyChanged(); } }
+
+        // Core app settings
+        private string _overwritePolicy = "Overwrite";
+        public string OverwritePolicy { get => _overwritePolicy; set { _overwritePolicy = value; OnPropertyChanged(); } }
+
+        private bool _useTemporaryCopyWithoutRevitLinks = true;
+        public bool UseTemporaryCopyWithoutRevitLinks { get => _useTemporaryCopyWithoutRevitLinks; set { _useTemporaryCopyWithoutRevitLinks = value; OnPropertyChanged(); } }
 
         public event PropertyChangedEventHandler? PropertyChanged;
         protected void OnPropertyChanged([CallerMemberName] string propertyName = "") => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));

@@ -56,21 +56,21 @@ namespace ScheduledNwcExporter.UI.ViewModels
                 RetryDelaySeconds = job.RetryDelaySeconds,
                 CustomExportSettings = job.CustomExportSettings != null ? new ExportSettings
                 {
-                    ExportLinks = job.CustomExportSettings.ExportLinks,
-                    ExportScope = job.CustomExportSettings.ExportScope,
-                    Coordinates = job.CustomExportSettings.Coordinates,
-                    OverwritePolicy = job.CustomExportSettings.OverwritePolicy,
-                    ExportElementIds = job.CustomExportSettings.ExportElementIds,
-                    ExportRoomGeometry = job.CustomExportSettings.ExportRoomGeometry,
-                    UseTemporaryCopyWithoutRevitLinks = job.CustomExportSettings.UseTemporaryCopyWithoutRevitLinks,
+                    ConvertElementProperties = job.CustomExportSettings.ConvertElementProperties,
                     DivideFileIntoLevels = job.CustomExportSettings.DivideFileIntoLevels,
+                    ExportElementIds = job.CustomExportSettings.ExportElementIds,
                     ExportParts = job.CustomExportSettings.ExportParts,
-                    FacetingFactor = job.CustomExportSettings.FacetingFactor,
-                    ParameterExportMode = job.CustomExportSettings.ParameterExportMode,
-                    ExportUrls = job.CustomExportSettings.ExportUrls,
-                    ExportRoomAsAttribute = job.CustomExportSettings.ExportRoomAsAttribute,
+                    ExportInternalCoordinates = job.CustomExportSettings.ExportInternalCoordinates,
                     ConvertLights = job.CustomExportSettings.ConvertLights,
-                    FindMissingMaterials = job.CustomExportSettings.FindMissingMaterials
+                    ExportRoomAsAttribute = job.CustomExportSettings.ExportRoomAsAttribute,
+                    ExportRoomGeometry = job.CustomExportSettings.ExportRoomGeometry,
+                    ExportUrls = job.CustomExportSettings.ExportUrls,
+                    FindMissingMaterials = job.CustomExportSettings.FindMissingMaterials,
+                    ExportAllParameters = job.CustomExportSettings.ExportAllParameters,
+                    ExportElementParameters = job.CustomExportSettings.ExportElementParameters,
+                    FacetingFactor = job.CustomExportSettings.FacetingFactor,
+                    OverwritePolicy = job.CustomExportSettings.OverwritePolicy,
+                    UseTemporaryCopyWithoutRevitLinks = job.CustomExportSettings.UseTemporaryCopyWithoutRevitLinks
                 } : null
             } : new ModelExportJob();
 

@@ -91,35 +91,24 @@
                     </Grid.ColumnDefinitions>
 
                     <StackPanel Grid.Column="0" Margin="0,0,10,0">
-                        <CheckBox Content="Export Revit Links" IsChecked="{Binding Job.CustomExportSettings.ExportLinks}" Margin="0,0,0,6"/>
-                        <CheckBox Content="Performance Mode" IsChecked="{Binding Job.CustomExportSettings.UseTemporaryCopyWithoutRevitLinks}" Margin="0,0,0,6"/>
-                        <CheckBox Content="Divide Into Levels" IsChecked="{Binding Job.CustomExportSettings.DivideFileIntoLevels}" Margin="0,0,0,6"/>
+                        <CheckBox Content="Convert Element Properties" IsChecked="{Binding Job.CustomExportSettings.ConvertElementProperties}" Margin="0,0,0,6"/>
+                        <CheckBox Content="Divide File Into Levels" IsChecked="{Binding Job.CustomExportSettings.DivideFileIntoLevels}" Margin="0,0,0,6"/>
+                        <CheckBox Content="Export Element Ids" IsChecked="{Binding Job.CustomExportSettings.ExportElementIds}" Margin="0,0,0,6"/>
                         <CheckBox Content="Export Parts" IsChecked="{Binding Job.CustomExportSettings.ExportParts}" Margin="0,0,0,6"/>
-                        <CheckBox Content="Export URLs" IsChecked="{Binding Job.CustomExportSettings.ExportUrls}" Margin="0,0,0,6"/>
-                        <CheckBox Content="Room As Attribute" IsChecked="{Binding Job.CustomExportSettings.ExportRoomAsAttribute}" Margin="0,0,0,6"/>
+                        <CheckBox Content="Export Internal Coordinates" IsChecked="{Binding Job.CustomExportSettings.ExportInternalCoordinates}" Margin="0,0,0,6"/>
+                        <CheckBox Content="Convert Lights (Revit 2020+)" IsChecked="{Binding Job.CustomExportSettings.ConvertLights}" Margin="0,0,0,6"/>
                     </StackPanel>
 
                     <StackPanel Grid.Column="1" Margin="10,0,0,0">
-                        <CheckBox Content="Convert Lights" IsChecked="{Binding Job.CustomExportSettings.ConvertLights}" Margin="0,0,0,6"/>
+                        <CheckBox Content="Export Room As Attribute" IsChecked="{Binding Job.CustomExportSettings.ExportRoomAsAttribute}" Margin="0,0,0,6"/>
+                        <CheckBox Content="Export Room Geometry" IsChecked="{Binding Job.CustomExportSettings.ExportRoomGeometry}" Margin="0,0,0,6"/>
+                        <CheckBox Content="Export URLs" IsChecked="{Binding Job.CustomExportSettings.ExportUrls}" Margin="0,0,0,6"/>
                         <CheckBox Content="Find Missing Materials" IsChecked="{Binding Job.CustomExportSettings.FindMissingMaterials}" Margin="0,0,0,6"/>
-                        <StackPanel Orientation="Horizontal" Margin="0,4,0,6">
-                            <TextBlock Text="Coordinates:" Width="85" VerticalAlignment="Center" FontSize="11"/>
-                            <ComboBox SelectedValue="{Binding Job.CustomExportSettings.Coordinates}" SelectedValuePath="Content" Width="100" Height="22">
-                                <ComboBoxItem Content="Shared"/>
-                                <ComboBoxItem Content="Internal"/>
-                            </ComboBox>
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,4,0,6">
-                            <TextBlock Text="Faceting:" Width="85" VerticalAlignment="Center" FontSize="11"/>
-                            <TextBox Text="{Binding Job.CustomExportSettings.FacetingFactor}" Width="60" Height="22" VerticalContentAlignment="Center"/>
-                        </StackPanel>
+                        <CheckBox Content="Export All Parameters" IsChecked="{Binding Job.CustomExportSettings.ExportAllParameters}" Margin="0,0,0,6"/>
+                        <CheckBox Content="Export Element Parameters" IsChecked="{Binding Job.CustomExportSettings.ExportElementParameters}" Margin="0,0,0,6"/>
                         <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                            <TextBlock Text="Parameters:" Width="85" VerticalAlignment="Center" FontSize="11"/>
-                            <ComboBox SelectedValue="{Binding Job.CustomExportSettings.ParameterExportMode}" SelectedValuePath="Content" Width="100" Height="22">
-                                <ComboBoxItem Content="All"/>
-                                <ComboBoxItem Content="Elements"/>
-                                <ComboBoxItem Content="None"/>
-                            </ComboBox>
+                            <TextBlock Text="Faceting Factor:" Width="85" VerticalAlignment="Center" FontSize="11"/>
+                            <TextBox Text="{Binding Job.CustomExportSettings.FacetingFactor}" Width="60" Height="22" VerticalContentAlignment="Center"/>
                         </StackPanel>
                     </StackPanel>
                 </Grid>

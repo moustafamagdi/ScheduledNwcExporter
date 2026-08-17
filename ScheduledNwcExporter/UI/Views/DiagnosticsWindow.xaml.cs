@@ -4,6 +4,8 @@ using System.Text;
 using System.Windows;
 using ScheduledNwcExporter.Logging;
 using ScheduledNwcExporter.Revit;
+using ScheduledNwcExporter.Configuration;
+using ScheduledNwcExporter.UI.ViewModels;
 
 namespace ScheduledNwcExporter.UI.Views
 {
