@@ -15,7 +15,7 @@ namespace ScheduledNwcExporter.Application
         public Result OnStartup(UIControlledApplication application)
         {
             // Register assembly resolver to handle dependencies like Autodesk.Forge
-            AppDomain.CurrentDomain.AssemblyResolve += OnAssemblyResolve;
+            Core.AssemblyLoader.Register();
 
             try
             {
@@ -53,7 +53,7 @@ namespace ScheduledNwcExporter.Application
 
         public Result OnShutdown(UIControlledApplication application)
         {
-            AppDomain.CurrentDomain.AssemblyResolve -= OnAssemblyResolve;
+            Core.AssemblyLoader.Unregister();
 
             if (ExportManagerWindow != null)
             {
@@ -64,22 +64,6 @@ namespace ScheduledNwcExporter.Application
             return Result.Succeeded;
         }
 
-        private Assembly? OnAssemblyResolve(object sender, ResolveEventArgs args)
-        {
-            try
-            {
-                string assemblyName = new AssemblyName(args.Name).Name;
-                string assemblyDir = System.IO.Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-                string assemblyPath = System.IO.Path.Combine(assemblyDir, assemblyName + ".dll");
-
-                if (System.IO.File.Exists(assemblyPath))
-                {
-                    return Assembly.LoadFrom(assemblyPath);
-                }
-            }
-            catch { /* Ignore resolution errors */ }
-
-            return null;
-        }
+        
     }
 }

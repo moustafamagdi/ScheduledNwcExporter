@@ -12,6 +12,9 @@ namespace ScheduledNwcExporter.Application
     {
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
+            // Ensure dependencies are resolvable (crucial for Add-In Manager usage)
+            Core.AssemblyLoader.Register();
+
             try
             {
                 if (App.ExportManagerWindow == null || !App.ExportManagerWindow.IsVisible)
