@@ -19,7 +19,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
     public class MainViewModel : BindableBase
     {
         private readonly ConfigurationManager _configManager;
-        private readonly FileLogger _logger;
+        private readonly ILogger _logger;
         private readonly ScheduleManager _scheduleManager;
         private readonly ExportQueueExternalEventHandler _queueHandler;
 
@@ -235,7 +235,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
         public ICommand ImportSettingsCommand { get; }
         // Removed separate job commands in favor of unified settings export/import
 
-        public MainViewModel(ConfigurationManager configManager, FileLogger logger, ExportQueueExternalEventHandler queueHandler)
+        public MainViewModel(ConfigurationManager configManager, ILogger logger, ExportQueueExternalEventHandler queueHandler)
         {
             _configManager = configManager ?? throw new ArgumentNullException(nameof(configManager));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));

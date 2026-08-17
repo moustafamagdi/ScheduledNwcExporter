@@ -44,6 +44,7 @@ namespace ScheduledNwcExporter.Logging
         void Error(string category, string message, string modelName = "", string stage = "", Exception? ex = null);
         void Fatal(string category, string message, string modelName = "", string stage = "", Exception? ex = null);
         string LogFilePath { get; }
+        bool DebugMode { get; set; }
     }
 
     public class FileLogger : ILogger

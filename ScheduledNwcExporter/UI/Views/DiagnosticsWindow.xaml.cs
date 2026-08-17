@@ -9,9 +9,9 @@ namespace ScheduledNwcExporter.UI.Views
 {
     public partial class DiagnosticsWindow : Window
     {
-        private readonly FileLogger _logger;
+        private readonly ILogger _logger;
 
-        public DiagnosticsWindow(FileLogger logger)
+        public DiagnosticsWindow(ILogger logger)
         {
             InitializeComponent();
             _logger = logger;
