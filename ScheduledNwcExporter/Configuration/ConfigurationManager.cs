@@ -225,48 +225,83 @@ namespace ScheduledNwcExporter.Configuration
         }
     }
 
-    public class ExportSettings
+    public class ExportSettings : INotifyPropertyChanged
     {
-        public bool ExportLinks { get; set; } = false;
-        public string ExportScope { get; set; } = "View";
-        public string Coordinates { get; set; } = "Shared";
-        public string OverwritePolicy { get; set; } = "Overwrite"; // Overwrite, Skip, TimestampedCopy
-        public bool ExportElementIds { get; set; } = true;
-        public bool ExportRoomGeometry { get; set; } = true;
+        private bool _exportLinks = false;
+        public bool ExportLinks { get => _exportLinks; set { _exportLinks = value; OnPropertyChanged(); } }
 
-        /// <summary>
-        /// When enabled, the exporter creates a local temporary RVT copy and marks top-level Revit links
-        /// as unloaded in its TransmissionData before the copy is opened for export.
-        /// </summary>
-        public bool UseTemporaryCopyWithoutRevitLinks { get; set; } = true;
+        private string _exportScope = "View";
+        public string ExportScope { get => _exportScope; set { _exportScope = value; OnPropertyChanged(); } }
 
-        // Advanced Options matching professional Navisworks exporters
-        public bool DivideFileIntoLevels { get; set; } = false;
-        public bool ExportParts { get; set; } = false;
-        public double FacetingFactor { get; set; } = 1.0;
-        public string ParameterExportMode { get; set; } = "All"; // All, Elements, None
-        public bool ExportUrls { get; set; } = false;
-        public bool ExportRoomAsAttribute { get; set; } = false;
-        public bool ConvertLights { get; set; } = false;
-        public bool FindMissingMaterials { get; set; } = false;
+        private string _coordinates = "Shared";
+        public string Coordinates { get => _coordinates; set { _coordinates = value; OnPropertyChanged(); } }
+
+        private string _overwritePolicy = "Overwrite";
+        public string OverwritePolicy { get => _overwritePolicy; set { _overwritePolicy = value; OnPropertyChanged(); } }
+
+        private bool _exportElementIds = true;
+        public bool ExportElementIds { get => _exportElementIds; set { _exportElementIds = value; OnPropertyChanged(); } }
+
+        private bool _exportRoomGeometry = true;
+        public bool ExportRoomGeometry { get => _exportRoomGeometry; set { _exportRoomGeometry = value; OnPropertyChanged(); } }
+
+        private bool _useTemporaryCopyWithoutRevitLinks = true;
+        public bool UseTemporaryCopyWithoutRevitLinks { get => _useTemporaryCopyWithoutRevitLinks; set { _useTemporaryCopyWithoutRevitLinks = value; OnPropertyChanged(); } }
+
+        private bool _divideFileIntoLevels = false;
+        public bool DivideFileIntoLevels { get => _divideFileIntoLevels; set { _divideFileIntoLevels = value; OnPropertyChanged(); } }
+
+        private bool _exportParts = false;
+        public bool ExportParts { get => _exportParts; set { _exportParts = value; OnPropertyChanged(); } }
+
+        private double _facetingFactor = 1.0;
+        public double FacetingFactor { get => _facetingFactor; set { _facetingFactor = value; OnPropertyChanged(); } }
+
+        private string _parameterExportMode = "All";
+        public string ParameterExportMode { get => _parameterExportMode; set { _parameterExportMode = value; OnPropertyChanged(); } }
+
+        private bool _exportUrls = false;
+        public bool ExportUrls { get => _exportUrls; set { _exportUrls = value; OnPropertyChanged(); } }
+
+        private bool _exportRoomAsAttribute = false;
+        public bool ExportRoomAsAttribute { get => _exportRoomAsAttribute; set { _exportRoomAsAttribute = value; OnPropertyChanged(); } }
+
+        private bool _convertLights = false;
+        public bool ConvertLights { get => _convertLights; set { _convertLights = value; OnPropertyChanged(); } }
+
+        private bool _findMissingMaterials = false;
+        public bool FindMissingMaterials { get => _findMissingMaterials; set { _findMissingMaterials = value; OnPropertyChanged(); } }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+        protected void OnPropertyChanged([CallerMemberName] string propertyName = "") => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 
-    public class ScheduleSlot
+    public class ScheduleSlot : INotifyPropertyChanged
     {
-        public bool IsEnabled { get; set; } = true;
-        public int Hour { get; set; } = 19;
-        public int Minute { get; set; } = 0;
-        public List<DayOfWeek> Days { get; set; } = new List<DayOfWeek> 
+        private bool _isEnabled = true;
+        public bool IsEnabled { get => _isEnabled; set { _isEnabled = value; OnPropertyChanged(); } }
+
+        private int _hour = 19;
+        public int Hour { get => _hour; set { _hour = value; OnPropertyChanged(); OnPropertyChanged(nameof(TimeDisplay)); } }
+
+        private int _minute = 0;
+        public int Minute { get => _minute; set { _minute = value; OnPropertyChanged(); OnPropertyChanged(nameof(TimeDisplay)); } }
+
+        private List<DayOfWeek> _days = new List<DayOfWeek> 
         { 
             DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, 
             DayOfWeek.Thursday, DayOfWeek.Friday 
         };
+        public List<DayOfWeek> Days { get => _days; set { _days = value; OnPropertyChanged(); OnPropertyChanged(nameof(DaysDisplay)); } }
 
         [JsonIgnore]
         public string TimeDisplay => $"{Hour:D2}:{Minute:D2}";
         
         [JsonIgnore]
         public string DaysDisplay => Days.Count == 7 ? "Daily" : string.Join(", ", Days.Select(d => d.ToString().Substring(0, 3)));
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+        protected void OnPropertyChanged([CallerMemberName] string propertyName = "") => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 
     public class SchedulerSettings
@@ -379,20 +414,34 @@ namespace ScheduledNwcExporter.Configuration
         {
             try
             {
+                if (!File.Exists(filePath)) throw new FileNotFoundException("Import file not found.", filePath);
+
                 string json = File.ReadAllText(filePath);
                 var imported = JsonConvert.DeserializeObject<AppSettings>(json);
-                if (imported != null)
+                
+                if (imported == null) throw new InvalidOperationException("The imported configuration file is empty or invalid.");
+
+                // 1. Create backup of current config
+                if (File.Exists(_configFilePath))
                 {
-                    CurrentSettings.Export = imported.Export ?? CurrentSettings.Export;
-                    CurrentSettings.Scheduler = imported.Scheduler ?? CurrentSettings.Scheduler;
-                    CurrentSettings.DebugMode = imported.DebugMode;
-                    if (imported.Jobs != null && imported.Jobs.Count > 0)
-                    {
-                        CurrentSettings.Jobs = imported.Jobs;
-                    }
-                    SaveConfiguration();
-                    _logger.Info("Config", $"Successfully imported unified settings from {filePath}");
+                    string backupPath = _configFilePath + ".bak_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                    File.Copy(_configFilePath, backupPath, true);
+                    _logger.Info("Config", $"Created backup of current configuration at {backupPath}");
                 }
+
+                // 2. Apply settings
+                CurrentSettings.Export = imported.Export ?? CurrentSettings.Export;
+                CurrentSettings.Scheduler = imported.Scheduler ?? CurrentSettings.Scheduler;
+                CurrentSettings.DebugMode = imported.DebugMode;
+                
+                if (imported.Jobs != null)
+                {
+                    CurrentSettings.Jobs = imported.Jobs;
+                }
+
+                // 3. Save and log
+                SaveConfiguration();
+                _logger.Success("Config", $"Successfully imported unified settings from {filePath}");
             }
             catch (Exception ex)
             {

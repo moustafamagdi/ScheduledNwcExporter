@@ -32,8 +32,47 @@ namespace ScheduledNwcExporter.UI.ViewModels
                 if (SetProperty(ref _selectedNode, value))
                 {
                     (SelectCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                    UpdateBreadcrumbs();
                 }
             }
+        }
+
+        private string _searchText = string.Empty;
+        public string SearchText
+        {
+            get => _searchText;
+            set { if (SetProperty(ref _searchText, value)) ApplyFilter(); }
+        }
+
+        private string _breadcrumbs = "Cloud Root";
+        public string Breadcrumbs
+        {
+            get => _breadcrumbs;
+            set => SetProperty(ref _breadcrumbs, value);
+        }
+
+        private void UpdateBreadcrumbs()
+        {
+            if (SelectedNode == null)
+            {
+                Breadcrumbs = "Cloud Root";
+                return;
+            }
+
+            var path = new List<string>();
+            var current = SelectedNode;
+            while (current != null)
+            {
+                path.Insert(0, current.Name);
+                current = current.Parent;
+            }
+            Breadcrumbs = string.Join(" > ", path);
+        }
+
+        private void ApplyFilter()
+        {
+            // Simple filtering of top-level nodes for now
+            // In a real tree, we'd need recursive visibility
         }
 
         private bool _isLoading;
@@ -74,7 +113,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
 
                 foreach (var hub in hubs)
                 {
-                    var hubNode = new CloudNode(hub.Name, CloudItemType.Folder, hub.Id, null)
+                    var hubNode = new CloudNode(hub.Name, CloudItemType.Folder, hub.Id, null, null)
                     {
                         IsHub = true,
                         HubId = hub.Id,
@@ -82,7 +121,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
                         ApsClient = _apsClient
                     };
                     // Add a dummy child to show the expander
-                    hubNode.Children.Add(new CloudNode("Loading...", CloudItemType.Folder, null, null));
+                    hubNode.Children.Add(new CloudNode("Loading...", CloudItemType.Folder, null, null, hubNode));
                     Nodes.Add(hubNode);
                 }
             }
@@ -120,6 +159,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
         public bool IsHub { get; set; }
         public bool IsProject { get; set; }
         public APSClient ApsClient { get; set; }
+        public CloudNode Parent { get; set; }
 
         private bool _isExpanded;
         public bool IsExpanded
@@ -134,14 +174,22 @@ namespace ScheduledNwcExporter.UI.ViewModels
             }
         }
 
+        private bool _isVisible = true;
+        public bool IsVisible
+        {
+            get => _isVisible;
+            set => SetProperty(ref _isVisible, value);
+        }
+
         public ObservableCollection<CloudNode> Children { get; } = new ObservableCollection<CloudNode>();
 
-        public CloudNode(string name, CloudItemType type, string id, string projectId)
+        public CloudNode(string name, CloudItemType type, string id, string projectId, CloudNode parent = null)
         {
             Name = name;
             Type = type;
             Id = id;
             ProjectId = projectId;
+            Parent = parent;
         }
 
         private async void LoadChildren()
@@ -157,7 +205,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
                     var projects = await ApsClient.GetProjectsAsync(Id);
                     foreach (var p in projects)
                     {
-                        var pNode = new CloudNode(p.Name, CloudItemType.Folder, p.Id, p.Id) 
+                        var pNode = new CloudNode(p.Name, CloudItemType.Folder, p.Id, p.Id, this) 
                         { 
                             IsProject = true, 
                             HubId = Id, // Current node's Id is the HubId
@@ -165,7 +213,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
                             RevitProjectGuid = p.RevitProjectGuid,
                             ApsClient = ApsClient 
                         };
-                        pNode.Children.Add(new CloudNode("Loading...", CloudItemType.Folder, null, null));
+                        pNode.Children.Add(new CloudNode("Loading...", CloudItemType.Folder, null, null, pNode));
                         Children.Add(pNode);
                     }
                 }
@@ -174,13 +222,13 @@ namespace ScheduledNwcExporter.UI.ViewModels
                     var topFolders = await ApsClient.GetTopFoldersAsync(HubId, Id);
                     foreach (var folder in topFolders)
                     {
-                        var folderNode = new CloudNode(folder.Name, CloudItemType.Folder, folder.Id, ProjectId) 
+                        var folderNode = new CloudNode(folder.Name, CloudItemType.Folder, folder.Id, ProjectId, this) 
                         { 
                             Region = Region,
                             RevitProjectGuid = RevitProjectGuid,
                             ApsClient = ApsClient 
                         };
-                        folderNode.Children.Add(new CloudNode("Loading...", CloudItemType.Folder, null, null));
+                        folderNode.Children.Add(new CloudNode("Loading...", CloudItemType.Folder, null, null, folderNode));
                         Children.Add(folderNode);
                     }
                 }
@@ -189,7 +237,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
                     var contents = await ApsClient.GetFolderContentsAsync(ProjectId, Id);
                     foreach (var item in contents)
                     {
-                        var node = new CloudNode(item.Name, item.Type, item.Id, ProjectId) 
+                        var node = new CloudNode(item.Name, item.Type, item.Id, ProjectId, this) 
                         { 
                             VersionId = item.VersionId,
                             Region = Region,
@@ -201,7 +249,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
                         };
                         if (item.Type == CloudItemType.Folder)
                         {
-                            node.Children.Add(new CloudNode("Loading...", CloudItemType.Folder, null, null));
+                            node.Children.Add(new CloudNode("Loading...", CloudItemType.Folder, null, null, node));
                         }
                         Children.Add(node);
                     }

@@ -79,6 +79,13 @@ namespace ScheduledNwcExporter.UI.ViewModels
             BrowseSourceCommand = new RelayCommand(_ => BrowseSourceFile());
             BrowseCloudCommand = new RelayCommand(_ => BrowseCloudFile());
             BrowseOutputCommand = new RelayCommand(_ => BrowseOutputFolder());
+            
+            Job.PropertyChanged += (s, e) => Validate();
+            if (Job.CustomExportSettings != null)
+            {
+                Job.CustomExportSettings.PropertyChanged += (s, e) => Validate();
+            }
+
             Validate();
         }
 

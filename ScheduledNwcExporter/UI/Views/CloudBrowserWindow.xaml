@@ -16,13 +16,28 @@
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Text="Select a Revit model from Autodesk Construction Cloud:" FontWeight="Bold" Margin="0,0,0,10"/>
+        <TextBlock Grid.Row="0" Text="Select a Revit model from Autodesk Construction Cloud:" FontWeight="Bold" Margin="0,0,0,10"/>
 
-        <TreeView Grid.Row="1" ItemsSource="{Binding Nodes}" Margin="0,0,0,10" SelectedItemChanged="TreeView_SelectedItemChanged">
+        <Grid Grid.Row="1" Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Search:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <TextBox Grid.Column="1" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center"/>
+        </Grid>
+
+        <Border Grid.Row="2" Background="#FFF0F0F0" Padding="6,4" Margin="0,0,0,8" CornerRadius="2">
+            <TextBlock Text="{Binding Breadcrumbs}" FontSize="10" Foreground="#FF666666" TextWrapping="Wrap"/>
+        </Border>
+
+        <TreeView Grid.Row="3" ItemsSource="{Binding Nodes}" Margin="0,0,0,10" SelectedItemChanged="TreeView_SelectedItemChanged">
             <TreeView.ItemContainerStyle>
                 <Style TargetType="TreeViewItem">
                     <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
@@ -39,12 +54,12 @@
             </TreeView.ItemTemplate>
         </TreeView>
 
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button Content="Select Model" Command="{Binding SelectCommand}" Width="100" Margin="0,0,10,0" IsDefault="True"/>
             <Button Content="Cancel" Command="{Binding CancelCommand}" Width="100" IsCancel="True"/>
         </StackPanel>
 
-        <Grid Grid.Row="1" Background="#80FFFFFF" Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
+        <Grid Grid.Row="3" Background="#80FFFFFF" Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                 <ProgressBar IsIndeterminate="True" Width="200" Height="20"/>
                 <TextBlock Text="Loading Cloud Data..." HorizontalAlignment="Center" Margin="0,5,0,0"/>
