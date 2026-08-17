@@ -65,10 +65,8 @@ namespace ScheduledNwcExporter.Revit
                 {
                     // EXPERT FIX: For Cloud Workshared models, we must explicitly set WorksharingOpenOptions
                     // and open the CENTRAL version directly to avoid "Detached" permission issues.
-                    var wsOptions = new WorksharingOpenOptions();
-                    wsOptions.OpenWorksetsConfiguration = WorksetConfigurationOption.OpenAllWorksets;
-                    
-                    openOptions.SetWorksharingOpenOptions(wsOptions);
+                    // In Revit 2024, WorksharingOpenOptions is set via the property.
+                    openOptions.GetWorksharingOpenOptions().OpenWorksetsConfiguration = WorksetConfigurationOption.OpenAllWorksets;
                     openOptions.DetachFromCentralOption = DetachFromCentralOption.DoNotDetach; // Open central directly as ReadOnly
                 }
                 else
@@ -76,8 +74,7 @@ namespace ScheduledNwcExporter.Revit
                     openOptions.DetachFromCentralOption = DetachFromCentralOption.DetachAndPreserveWorksets;
                     
                     // Worksets must be selected before opening.
-                    var worksetConfiguration = new WorksetConfiguration(WorksetConfigurationOption.OpenAllWorksets);
-                    openOptions.SetOpenWorksetsConfiguration(worksetConfiguration);
+                    openOptions.GetWorksharingOpenOptions().OpenWorksetsConfiguration = WorksetConfigurationOption.OpenAllWorksets;
                 }
 
                 // This opens the document without activating it in Revit's user interface.
