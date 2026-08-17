@@ -42,7 +42,43 @@ namespace ScheduledNwcExporter.Configuration
         public string OutputFileNameTemplate
         {
             get => _outputFileNameTemplate;
-            set { _outputFileNameTemplate = value; OnPropertyChanged(); }
+            set { _outputFileNameTemplate = value; OnPropertyChanged(); OnPropertyChanged(nameof(ResolvedOutputFilename)); }
+        }
+
+        [JsonIgnore]
+        public string ResolvedOutputFilename
+        {
+            get
+            {
+                try
+                {
+                    if (string.IsNullOrWhiteSpace(_sourceModelPath)) return "Model.nwc";
+                    string modelFileName = Path.GetFileName(_sourceModelPath);
+                    string modelName = Path.GetFileNameWithoutExtension(modelFileName);
+                    DateTime now = DateTime.Now;
+                    string resolved = _outputFileNameTemplate
+                        .Replace("{ModelName}", modelName)
+                        .Replace("{ModelFileName}", modelFileName)
+                        .Replace("{Date}", now.ToString("yyyy-MM-dd"))
+                        .Replace("{Time}", now.ToString("HH-mm-ss"))
+                        .Replace("{Year}", now.ToString("yyyy"))
+                        .Replace("{Month}", now.ToString("MM"))
+                        .Replace("{Day}", now.ToString("dd"))
+                        .Replace("{Hour}", now.ToString("HH"))
+                        .Replace("{Minute}", now.ToString("mm"));
+
+                    foreach (char invalidCharacter in Path.GetInvalidFileNameChars())
+                    {
+                        resolved = resolved.Replace(invalidCharacter, '_');
+                    }
+
+                    return resolved.EndsWith(".nwc", StringComparison.OrdinalIgnoreCase) ? resolved : resolved + ".nwc";
+                }
+                catch
+                {
+                    return "Model.nwc";
+                }
+            }
         }
 
         private int _retryCount = 1;
