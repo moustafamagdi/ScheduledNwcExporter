@@ -53,9 +53,14 @@ namespace ScheduledNwcExporter.UI.ViewModels
             var cloudWindow = new Views.CloudBrowserWindow(cloudVm);
             if (cloudWindow.ShowDialog() == true && cloudWindow.SelectedNode != null)
             {
-                // Format: acc://ProjectName|ProjectId/ModelName|VersionId
+                // Format: acc://ProjectName|ProjectId/ModelName|VersionId.rvt
                 var node = cloudWindow.SelectedNode;
-                Job.SourceModelPath = $"acc://{node.Name}|{node.VersionId}"; 
+                string path = $"acc://{node.Name}|{node.VersionId}";
+                if (!path.EndsWith(".rvt", StringComparison.OrdinalIgnoreCase))
+                {
+                    path += ".rvt";
+                }
+                Job.SourceModelPath = path; 
                 OnPropertyChanged(nameof(Job));
                 Validate();
             }
@@ -110,7 +115,9 @@ namespace ScheduledNwcExporter.UI.ViewModels
                 ValidationMessage = "✕ Source model file not found.";
                 return false;
             }
-            if (!Job.SourceModelPath.EndsWith(".rvt", StringComparison.OrdinalIgnoreCase))
+            
+            // For cloud paths, we check if it contains .rvt since it might be followed by URN
+            if (!Job.SourceModelPath.ToLower().Contains(".rvt"))
             {
                 ValidationMessage = "✕ Source file must be a .rvt Revit model.";
                 return false;
