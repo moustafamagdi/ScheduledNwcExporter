@@ -75,7 +75,17 @@ namespace ScheduledNwcExporter.UI.ViewModels
             
             foreach (var job in _settings.Jobs.Where(j => j.IsEnabled))
             {
-                Tests.Add(new DiagnosticTest { Title = $"Model: {Path.GetFileName(job.SourceModelPath)}", Details = "Verifying source and output accessibility." });
+                // acc:// values are technical identifiers, not valid Windows paths.
+                // Use the stored display path for cloud jobs and Path.GetFileName only for local files.
+                string modelLabel = job.IsCloud
+                    ? job.DisplaySourcePath
+                    : Path.GetFileName(job.SourceModelPath);
+
+                Tests.Add(new DiagnosticTest
+                {
+                    Title = $"Model: {modelLabel}",
+                    Details = "Verifying source and output accessibility."
+                });
             }
         }
 
@@ -150,7 +160,9 @@ namespace ScheduledNwcExporter.UI.ViewModels
                     if (job.IsCloud)
                     {
                         sourceOk = !string.IsNullOrEmpty(token);
-                        sourceDetails = sourceOk ? "Cloud source reachable." : "Cloud source requires active login.";
+                        sourceDetails = sourceOk
+                            ? $"Cloud authentication available for {job.DisplaySourcePath}."
+                            : $"Cloud source requires active login: {job.DisplaySourcePath}.";
                     }
                     else
                     {
