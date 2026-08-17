@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:ScheduledNwcExporter.UI.Views"
-        Title="Hatco NWC Exporter" Height="750" Width="950"
+        Title="Hatco NWC Exporter" Height="760" Width="1100"
         WindowStartupLocation="CenterScreen" Background="#FFF5F5F5">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
@@ -119,124 +119,141 @@
             </Grid>
         </GroupBox>
 
-        <!-- Unified Export Configuration -->
-        <Border Grid.Row="2" Margin="0,15,0,15" Height="290" Background="White" BorderBrush="#FFDDDDDD" BorderThickness="1" CornerRadius="4">
-            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                <StackPanel Margin="12">
-                    <TextBlock Text="Export Configuration" FontSize="15" FontWeight="Bold" Foreground="#FF2D2D30" Margin="0,0,0,10"/>
+        <!-- Compact Export Configuration: intentionally no scrollbars -->
+        <Border Grid.Row="2" Margin="0,12,0,12" Height="215" Background="White" BorderBrush="#FFE2E8F0" BorderThickness="1" CornerRadius="8">
+            <Grid Margin="10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="330"/>
+                    <ColumnDefinition Width="210"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
 
-                    <Grid Margin="0,0,0,10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-
-                        <GroupBox Grid.Column="0" Header="Automatic Schedule" Margin="0,0,8,0" Padding="8">
-                            <Grid>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="78"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                </Grid.RowDefinitions>
-                                <CheckBox Grid.Row="0" Content="Enable Global Scheduler" IsChecked="{Binding IsSchedulerEnabled}" Margin="0,0,0,6"/>
-
-                                <DataGrid Grid.Row="1" ItemsSource="{Binding ScheduleSlots}" SelectedItem="{Binding SelectedSlot}" AutoGenerateColumns="False" CanUserAddRows="False" Background="White" FontSize="11" SelectionMode="Single">
-                                    <DataGrid.Columns>
-                                        <DataGridCheckBoxColumn Header="On" Binding="{Binding IsEnabled}" Width="35"/>
-                                        <DataGridTextColumn Header="Time" Binding="{Binding TimeDisplay}" Width="50" IsReadOnly="True"/>
-                                        <DataGridTextColumn Header="Days" Binding="{Binding DaysDisplay}" Width="*" IsReadOnly="True"/>
-                                    </DataGrid.Columns>
-                                </DataGrid>
-
-                                <Border Grid.Row="2" BorderBrush="#FFD6D6D6" BorderThickness="1" CornerRadius="3" Padding="6" Margin="0,6,0,4" Background="#FFFCFCFC" IsEnabled="{Binding HasSelectedSlot}">
-                                    <Grid>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                        </Grid.RowDefinitions>
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="Time:" VerticalAlignment="Center" FontSize="11" Margin="0,0,6,0"/>
-                                            <ComboBox ItemsSource="{Binding ScheduleHours}" SelectedItem="{Binding SelectedSlot.Hour, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="48" Height="22">
-                                                <ComboBox.ItemTemplate>
-                                                    <DataTemplate><TextBlock Text="{Binding StringFormat={}{0:D2}}"/></DataTemplate>
-                                                </ComboBox.ItemTemplate>
-                                            </ComboBox>
-                                            <TextBlock Text=":" VerticalAlignment="Center" FontWeight="Bold" Margin="4,0"/>
-                                            <ComboBox ItemsSource="{Binding ScheduleMinutes}" SelectedItem="{Binding SelectedSlot.Minute, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="48" Height="22">
-                                                <ComboBox.ItemTemplate>
-                                                    <DataTemplate><TextBlock Text="{Binding StringFormat={}{0:D2}}"/></DataTemplate>
-                                                </ComboBox.ItemTemplate>
-                                            </ComboBox>
-                                        </StackPanel>
-                                        <WrapPanel Grid.Row="1" Margin="0,6,0,0">
-                                            <TextBlock Text="Days:" VerticalAlignment="Center" FontSize="11" Margin="0,0,8,0"/>
-                                            <CheckBox Content="Mon" IsChecked="{Binding IsMonday, Mode=TwoWay}" FontSize="11" Margin="0,0,6,0"/>
-                                            <CheckBox Content="Tue" IsChecked="{Binding IsTuesday, Mode=TwoWay}" FontSize="11" Margin="0,0,6,0"/>
-                                            <CheckBox Content="Wed" IsChecked="{Binding IsWednesday, Mode=TwoWay}" FontSize="11" Margin="0,0,6,0"/>
-                                            <CheckBox Content="Thu" IsChecked="{Binding IsThursday, Mode=TwoWay}" FontSize="11" Margin="0,0,6,0"/>
-                                            <CheckBox Content="Fri" IsChecked="{Binding IsFriday, Mode=TwoWay}" FontSize="11" Margin="0,0,6,0"/>
-                                            <CheckBox Content="Sat" IsChecked="{Binding IsSaturday, Mode=TwoWay}" FontSize="11" Margin="0,0,6,0"/>
-                                            <CheckBox Content="Sun" IsChecked="{Binding IsSunday, Mode=TwoWay}" FontSize="11"/>
-                                        </WrapPanel>
-                                    </Grid>
-                                </Border>
-
-                                <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,2,0,0">
-                                    <Button Content=" + Add " Command="{Binding AddSlotCommand}" Width="50" Height="22" FontSize="10" Margin="0,0,5,0"/>
-                                    <Button Content=" - Remove " Command="{Binding RemoveSlotCommand}" Width="60" Height="22" FontSize="10"/>
-                                    <TextBlock Text="Changes save automatically." FontSize="10" Foreground="Gray" Margin="10,0,0,0" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Grid>
-                        </GroupBox>
-
-                        <GroupBox Grid.Column="1" Header="Basic Export Behavior" Margin="8,0,0,0" Padding="8">
-                            <StackPanel>
-                                <CheckBox Content="Performance Mode (temporary no-link copy)" IsChecked="{Binding UseTemporaryCopyWithoutRevitLinks}" Margin="0,0,0,10"/>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                    <TextBlock Text="Overwrite Policy:" Width="110" VerticalAlignment="Center"/>
-                                    <ComboBox SelectedValue="{Binding OverwritePolicy}" SelectedValuePath="Content" Width="160" Height="24">
-                                        <ComboBoxItem Content="Overwrite"/>
-                                        <ComboBoxItem Content="Skip"/>
-                                        <ComboBoxItem Content="TimestampedCopy"/>
-                                    </ComboBox>
-                                </StackPanel>
-                                <Separator Margin="0,6,0,10"/>
-                                <TextBlock Text="Linked Revit and CAD files are always excluded from NWC export." TextWrapping="Wrap" FontSize="11" Foreground="#FF555555"/>
-                            </StackPanel>
-                        </GroupBox>
+                <!-- Schedule Card -->
+                <Border Grid.Column="0" Background="#FFF7FAFF" BorderBrush="#FFD9E6F5" BorderThickness="1" CornerRadius="6" Padding="8" Margin="0,0,8,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="58"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid Grid.Row="0" Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="SCHEDULE" FontWeight="Bold" FontSize="11" Foreground="#FF2563EB" VerticalAlignment="Center"/>
+                            <CheckBox Grid.Column="1" Content="Enabled" IsChecked="{Binding IsSchedulerEnabled}" FontSize="10"/>
+                        </Grid>
+                        <TextBlock Grid.Row="1" Text="Select a slot, then set its time and days." FontSize="10" Foreground="#FF64748B" Margin="0,0,0,4"/>
+                        <DataGrid Grid.Row="2" ItemsSource="{Binding ScheduleSlots}" SelectedItem="{Binding SelectedSlot}" AutoGenerateColumns="False" CanUserAddRows="False" Background="White" FontSize="10" SelectionMode="Single" HeadersVisibility="Column">
+                            <DataGrid.Columns>
+                                <DataGridCheckBoxColumn Header="On" Binding="{Binding IsEnabled}" Width="32"/>
+                                <DataGridTextColumn Header="Time" Binding="{Binding TimeDisplay}" Width="48" IsReadOnly="True"/>
+                                <DataGridTextColumn Header="Days" Binding="{Binding DaysDisplay}" Width="*" IsReadOnly="True"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <Grid Grid.Row="3" Margin="0,5,0,0" IsEnabled="{Binding HasSelectedSlot}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <ComboBox Grid.Column="0" ItemsSource="{Binding ScheduleHours}" SelectedItem="{Binding SelectedSlot.Hour, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="42" Height="21" FontSize="10">
+                                <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding StringFormat={}{0:D2}}"/></DataTemplate></ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <TextBlock Grid.Column="1" Text=":" FontWeight="Bold" VerticalAlignment="Center" Margin="3,0"/>
+                            <ComboBox Grid.Column="2" ItemsSource="{Binding ScheduleMinutes}" SelectedItem="{Binding SelectedSlot.Minute, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="42" Height="21" FontSize="10">
+                                <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding StringFormat={}{0:D2}}"/></DataTemplate></ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <WrapPanel Grid.Column="3" VerticalAlignment="Center" Margin="8,0,4,0">
+                                <CheckBox Content="M" IsChecked="{Binding IsMonday, Mode=TwoWay}" FontSize="10" Margin="0,0,3,0"/>
+                                <CheckBox Content="T" IsChecked="{Binding IsTuesday, Mode=TwoWay}" FontSize="10" Margin="0,0,3,0"/>
+                                <CheckBox Content="W" IsChecked="{Binding IsWednesday, Mode=TwoWay}" FontSize="10" Margin="0,0,3,0"/>
+                                <CheckBox Content="T" IsChecked="{Binding IsThursday, Mode=TwoWay}" FontSize="10" Margin="0,0,3,0"/>
+                                <CheckBox Content="F" IsChecked="{Binding IsFriday, Mode=TwoWay}" FontSize="10" Margin="0,0,3,0"/>
+                                <CheckBox Content="S" IsChecked="{Binding IsSaturday, Mode=TwoWay}" FontSize="10" Margin="0,0,3,0"/>
+                                <CheckBox Content="S" IsChecked="{Binding IsSunday, Mode=TwoWay}" FontSize="10"/>
+                            </WrapPanel>
+                            <Button Grid.Column="4" Content="+" Command="{Binding AddSlotCommand}" Width="22" Height="21" FontWeight="Bold" Margin="0,0,3,0" ToolTip="Add schedule slot"/>
+                            <Button Grid.Column="5" Content="−" Command="{Binding RemoveSlotCommand}" Width="22" Height="21" FontWeight="Bold" ToolTip="Remove selected schedule slot"/>
+                        </Grid>
                     </Grid>
+                </Border>
 
-                    <GroupBox Header="Advanced NWC Export Options" Padding="8" Margin="0,0,0,5">
-                        <Grid>
+                <!-- General Export Card -->
+                <Border Grid.Column="1" Background="#FFF9FAFB" BorderBrush="#FFE2E8F0" BorderThickness="1" CornerRadius="6" Padding="8" Margin="0,0,8,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="EXPORT BEHAVIOR" FontWeight="Bold" FontSize="11" Foreground="#FF475569" Margin="0,0,0,10"/>
+                        <CheckBox Grid.Row="1" Content="Performance Mode" IsChecked="{Binding UseTemporaryCopyWithoutRevitLinks}" FontSize="11" ToolTip="Create a temporary no-link copy before exporting."/>
+                        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,12,0,0">
+                            <TextBlock Text="Existing file:" FontSize="10" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                            <ComboBox SelectedValue="{Binding OverwritePolicy}" SelectedValuePath="Content" Width="112" Height="22" FontSize="10">
+                                <ComboBoxItem Content="Overwrite"/>
+                                <ComboBoxItem Content="Skip"/>
+                                <ComboBoxItem Content="TimestampedCopy"/>
+                            </ComboBox>
+                        </StackPanel>
+                        <Border Grid.Row="3" Background="#FFF1F5F9" CornerRadius="4" Padding="6" Margin="0,12,0,0">
+                            <TextBlock Text="Revit &amp; CAD links are always excluded." TextWrapping="Wrap" FontSize="10" Foreground="#FF475569"/>
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <!-- Advanced Options Card -->
+                <Border Grid.Column="2" Background="#FFFFFCF7" BorderBrush="#FFF1E5C8" BorderThickness="1" CornerRadius="6" Padding="8">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid Grid.Row="0" Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="ADVANCED NWC OPTIONS" FontWeight="Bold" FontSize="11" Foreground="#FFD97706"/>
+                            <TextBlock Grid.Column="1" Text="Applies globally unless a job override is enabled" FontSize="9" Foreground="#FF78716C" VerticalAlignment="Center"/>
+                        </Grid>
+                        <Grid Grid.Row="1">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,10,0">
-                                <CheckBox Content="Convert Element Properties" IsChecked="{Binding ConvertElementProperties}" Margin="0,0,0,6"/>
-                                <CheckBox Content="Divide File Into Levels" IsChecked="{Binding DivideFileIntoLevels}" Margin="0,0,0,6"/>
-                                <CheckBox Content="Export Element Ids" IsChecked="{Binding ExportElementIds}" Margin="0,0,0,6"/>
-                                <CheckBox Content="Export Parts" IsChecked="{Binding ExportParts}" Margin="0,0,0,6"/>
-                                <CheckBox Content="Export Internal Coordinates" IsChecked="{Binding ExportInternalCoordinates}" Margin="0,0,0,6"/>
-                                <CheckBox Content="Convert Lights (Revit 2020+)" IsChecked="{Binding ConvertLights}" Margin="0,0,0,6"/>
+                            <StackPanel Grid.Column="0">
+                                <CheckBox Content="Convert Element Properties" IsChecked="{Binding ConvertElementProperties}" FontSize="10" Margin="0,0,0,3"/>
+                                <CheckBox Content="Divide File Into Levels" IsChecked="{Binding DivideFileIntoLevels}" FontSize="10" Margin="0,0,0,3"/>
+                                <CheckBox Content="Export Element IDs" IsChecked="{Binding ExportElementIds}" FontSize="10" Margin="0,0,0,3"/>
+                                <CheckBox Content="Export Parts" IsChecked="{Binding ExportParts}" FontSize="10" Margin="0,0,0,3"/>
+                                <CheckBox Content="Internal Coordinates" IsChecked="{Binding ExportInternalCoordinates}" FontSize="10" Margin="0,0,0,3"/>
+                                <CheckBox Content="Convert Lights" IsChecked="{Binding ConvertLights}" FontSize="10"/>
                             </StackPanel>
-                            <StackPanel Grid.Column="1" Margin="10,0,0,0">
-                                <CheckBox Content="Export Room As Attribute" IsChecked="{Binding ExportRoomAsAttribute}" Margin="0,0,0,6"/>
-                                <CheckBox Content="Export Room Geometry" IsChecked="{Binding ExportRoomGeometry}" Margin="0,0,0,6"/>
-                                <CheckBox Content="Export URLs" IsChecked="{Binding ExportUrls}" Margin="0,0,0,6"/>
-                                <CheckBox Content="Find Missing Materials" IsChecked="{Binding FindMissingMaterials}" Margin="0,0,0,6"/>
-                                <CheckBox Content="Export All Parameters" IsChecked="{Binding ExportAllParameters}" Margin="0,0,0,6"/>
-                                <CheckBox Content="Export Element Parameters" IsChecked="{Binding ExportElementParameters}" Margin="0,0,0,6"/>
-                                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                    <TextBlock Text="Faceting Factor:" Width="110" VerticalAlignment="Center"/>
-                                    <TextBox Text="{Binding FacetingFactor}" Width="80" Height="24" VerticalContentAlignment="Center"/>
-                                </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <CheckBox Content="Room As Attribute" IsChecked="{Binding ExportRoomAsAttribute}" FontSize="10" Margin="0,0,0,3"/>
+                                <CheckBox Content="Room Geometry" IsChecked="{Binding ExportRoomGeometry}" FontSize="10" Margin="0,0,0,3"/>
+                                <CheckBox Content="Export URLs" IsChecked="{Binding ExportUrls}" FontSize="10" Margin="0,0,0,3"/>
+                                <CheckBox Content="Find Missing Materials" IsChecked="{Binding FindMissingMaterials}" FontSize="10" Margin="0,0,0,3"/>
+                                <CheckBox Content="All Parameters" IsChecked="{Binding ExportAllParameters}" FontSize="10" Margin="0,0,0,3"/>
+                                <CheckBox Content="Element Parameters" IsChecked="{Binding ExportElementParameters}" FontSize="10"/>
                             </StackPanel>
                         </Grid>
-                    </GroupBox>
-                </StackPanel>
-            </ScrollViewer>
+                        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,5,0,0">
+                            <TextBlock Text="Faceting:" FontSize="10" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                            <TextBox Text="{Binding FacetingFactor}" Width="52" Height="21" FontSize="10" VerticalContentAlignment="Center"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
         </Border>
 
         <!-- Current Activity / Progress -->
