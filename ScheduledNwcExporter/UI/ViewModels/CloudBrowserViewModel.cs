@@ -193,7 +193,9 @@ namespace ScheduledNwcExporter.UI.ViewModels
                         { 
                             VersionId = item.VersionId,
                             Region = Region,
-                            RevitProjectGuid = RevitProjectGuid,
+                            // The authoritative GUIDs come from the file's tip Version API response.
+                            // Do not overwrite the version-level Project GUID with the parent project node value.
+                            RevitProjectGuid = item.RevitProjectGuid,
                             RevitModelGuid = item.RevitModelGuid,
                             ApsClient = ApsClient 
                         };
