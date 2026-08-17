@@ -7,12 +7,15 @@ using Newtonsoft.Json.Linq;
 
 namespace ScheduledNwcExporter.Core
 {
+    /// <summary>
+    /// Robust client for interacting with Autodesk Platform Services (APS).
+    /// Uses raw JSON parsing to avoid SDK model limitations in .NET 4.8.
+    /// </summary>
     public class APSClient
     {
         private readonly HubsApi _hubsApi;
         private readonly ProjectsApi _projectsApi;
         private readonly FoldersApi _foldersApi;
-        private readonly ItemsApi _itemsApi;
 
         public APSClient(string accessToken)
         {
@@ -20,16 +23,17 @@ namespace ScheduledNwcExporter.Core
             _hubsApi = new HubsApi();
             _projectsApi = new ProjectsApi();
             _foldersApi = new FoldersApi();
-            _itemsApi = new ItemsApi();
         }
 
         public async Task<List<Hub>> GetHubsAsync()
         {
             var hubsList = new List<Hub>();
-            dynamic response = await _hubsApi.GetHubsAsync();
-            JObject json = JObject.FromObject(response);
+            Hubs response = await _hubsApi.GetHubsAsync();
             
-            var data = json["data"];
+            // response.ToJson() returns the raw API JSON (camelCase)
+            JObject json = JObject.Parse(response.ToJson());
+            var data = json["data"] as JArray;
+            
             if (data != null)
             {
                 foreach (var hub in data)
@@ -37,7 +41,7 @@ namespace ScheduledNwcExporter.Core
                     hubsList.Add(new Hub 
                     { 
                         Id = hub["id"]?.ToString(), 
-                        Name = hub["attributes"]?["name"]?.ToString() ?? "Unknown Hub" 
+                        Name = hub.SelectToken("attributes.name")?.ToString() ?? "Unknown Hub" 
                     });
                 }
             }
@@ -47,10 +51,11 @@ namespace ScheduledNwcExporter.Core
         public async Task<List<Project>> GetProjectsAsync(string hubId)
         {
             var projectsList = new List<Project>();
-            dynamic response = await _projectsApi.GetHubProjectsAsync(hubId);
-            JObject json = JObject.FromObject(response);
+            Projects response = await _projectsApi.GetHubProjectsAsync(hubId);
+            
+            JObject json = JObject.Parse(response.ToJson());
+            var data = json["data"] as JArray;
 
-            var data = json["data"];
             if (data != null)
             {
                 foreach (var project in data)
@@ -58,7 +63,7 @@ namespace ScheduledNwcExporter.Core
                     projectsList.Add(new Project 
                     { 
                         Id = project["id"]?.ToString(), 
-                        Name = project["attributes"]?["name"]?.ToString() ?? "Unknown Project" 
+                        Name = project.SelectToken("attributes.name")?.ToString() ?? "Unknown Project" 
                     });
                 }
             }
@@ -68,10 +73,11 @@ namespace ScheduledNwcExporter.Core
         public async Task<List<CloudItem>> GetTopFoldersAsync(string hubId, string projectId)
         {
             var items = new List<CloudItem>();
-            dynamic response = await _projectsApi.GetProjectTopFoldersAsync(hubId, projectId);
-            JObject json = JObject.FromObject(response);
+            TopFolders response = await _projectsApi.GetProjectTopFoldersAsync(hubId, projectId);
+            
+            JObject json = JObject.Parse(response.ToJson());
+            var data = json["data"] as JArray;
 
-            var data = json["data"];
             if (data != null)
             {
                 foreach (var folder in data)
@@ -79,7 +85,7 @@ namespace ScheduledNwcExporter.Core
                     items.Add(new CloudItem 
                     { 
                         Id = folder["id"]?.ToString(), 
-                        Name = folder["attributes"]?["displayName"]?.ToString() ?? folder["attributes"]?["name"]?.ToString() ?? "Unknown Folder", 
+                        Name = folder.SelectToken("attributes.displayName")?.ToString() ?? folder.SelectToken("attributes.name")?.ToString() ?? "Unknown Folder", 
                         Type = CloudItemType.Folder 
                     });
                 }
@@ -90,16 +96,17 @@ namespace ScheduledNwcExporter.Core
         public async Task<List<CloudItem>> GetFolderContentsAsync(string projectId, string folderId)
         {
             var items = new List<CloudItem>();
-            dynamic response = await _foldersApi.GetFolderContentsAsync(projectId, folderId);
-            JObject json = JObject.FromObject(response);
+            JsonApiCollection response = await _foldersApi.GetFolderContentsAsync(projectId, folderId);
+            
+            JObject json = JObject.Parse(response.ToJson());
+            var data = json["data"] as JArray;
 
-            var data = json["data"];
             if (data != null)
             {
                 foreach (var item in data)
                 {
                     string type = item["type"]?.ToString();
-                    string displayName = item["attributes"]?["displayName"]?.ToString() ?? item["attributes"]?["name"]?.ToString();
+                    string displayName = item.SelectToken("attributes.displayName")?.ToString() ?? item.SelectToken("attributes.name")?.ToString();
                     
                     if (type == "folders")
                     {
@@ -112,7 +119,7 @@ namespace ScheduledNwcExporter.Core
                             Id = item["id"]?.ToString(), 
                             Name = displayName, 
                             Type = CloudItemType.File,
-                            VersionId = item["relationships"]?["tip"]?["data"]?["id"]?.ToString()
+                            VersionId = item.SelectToken("relationships.tip.data.id")?.ToString()
                         });
                     }
                 }
