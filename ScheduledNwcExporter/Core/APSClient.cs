@@ -126,14 +126,32 @@ namespace ScheduledNwcExporter.Core
                 }
                 else if (type == "items" && !string.IsNullOrEmpty(displayName) && displayName.EndsWith(".rvt", StringComparison.OrdinalIgnoreCase))
                 {
-                    itemsList.Add(new CloudItem 
+                    string versionId = item.SelectToken("relationships.tip.data.id")?.ToString();
+                    var cloudItem = new CloudItem 
                     { 
                         Id = item["id"]?.ToString(), 
                         Name = displayName, 
                         Type = CloudItemType.File,
-                        VersionId = item.SelectToken("relationships.tip.data.id")?.ToString(),
-                        RevitModelGuid = item.SelectToken("attributes.extension.data.modelGuid")?.ToString()
-                    });
+                        VersionId = versionId
+                    };
+
+                    // EXPERT ADVICE: Fetch version details to get reliable GUIDs
+                    if (!string.IsNullOrEmpty(versionId))
+                    {
+                        try
+                        {
+                            var versionsApi = new Autodesk.Forge.VersionsApi();
+                            dynamic vResponse = await versionsApi.GetVersionAsync(projectId, versionId);
+                            JObject vJson = GetRawJObject(vResponse);
+                            var vData = vJson["data"];
+                            
+                            cloudItem.RevitModelGuid = vData?.SelectToken("attributes.extension.data.modelGuid")?.ToString();
+                            cloudItem.RevitProjectGuid = vData?.SelectToken("attributes.extension.data.projectGuid")?.ToString();
+                        }
+                        catch { /* Fallback to item data if version fetch fails */ }
+                    }
+
+                    itemsList.Add(cloudItem);
                 }
             }
             return itemsList;

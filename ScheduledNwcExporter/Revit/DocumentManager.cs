@@ -37,6 +37,8 @@ namespace ScheduledNwcExporter.Revit
                 _logger.Info("Revit", $"Opening model {(isCloud ? "from cloud" : "detached")}: {modelPath}", modelName, "OpeningModel");
 
                 ModelPath revitModelPath;
+                var openOptions = new OpenOptions();
+
                 if (isCloud)
                 {
                     // Format: acc://ModelName.rvt|Region|ProjectGUID|ModelGUID
@@ -47,40 +49,34 @@ namespace ScheduledNwcExporter.Revit
                     }
 
                     string region = parts[1];
-                    Guid projectGuid = Guid.Parse(parts[2]);
+                    // Strip "b." prefix if present as per expert advice
+                    string cleanProjectGuid = parts[2].StartsWith("b.") ? parts[2].Substring(2) : parts[2];
+                    
+                    Guid projectGuid = Guid.Parse(cleanProjectGuid);
                     Guid modelGuid = Guid.Parse(parts[3]);
 
                     _logger.Info("Revit", $"Resolving cloud path: Region={region}, Project={projectGuid}, Model={modelGuid}", modelName, "OpeningModel");
                     
                     // The official way to create a Cloud ModelPath in Revit API
                     revitModelPath = ModelPathUtils.ConvertCloudGUIDsToCloudPath(region, projectGuid, modelGuid);
+                    
+                    // EXPERT FIX: Open central directly as ReadOnly to avoid "Detached" permission issues in cloud.
+                    openOptions.DetachFromCentralOption = DetachFromCentralOption.DoNotDetach;
                 }
                 else
                 {
                     revitModelPath = ModelPathUtils.ConvertUserVisiblePathToModelPath(modelPath);
-                }
-                var openOptions = new OpenOptions();
-
-                if (isCloud)
-                {
-                    // EXPERT FIX: For Cloud Workshared models, we must explicitly set WorksharingOpenOptions
-                    // and open the CENTRAL version directly to avoid "Detached" permission issues.
-                    // In Revit 2024, WorksharingOpenOptions is set via the property.
-                    openOptions.GetWorksharingOpenOptions().OpenWorksetsConfiguration = WorksetConfigurationOption.OpenAllWorksets;
-                    openOptions.DetachFromCentralOption = DetachFromCentralOption.DoNotDetach; // Open central directly as ReadOnly
-                }
-                else
-                {
                     openOptions.DetachFromCentralOption = DetachFromCentralOption.DetachAndPreserveWorksets;
-                    
-                    // Worksets must be selected before opening.
-                    openOptions.GetWorksharingOpenOptions().OpenWorksetsConfiguration = WorksetConfigurationOption.OpenAllWorksets;
                 }
+
+                // EXPERT FIX for Revit 2024: Use WorksetConfiguration to open all worksets
+                var worksetConfiguration = new WorksetConfiguration(WorksetConfigurationOption.OpenAllWorksets);
+                openOptions.SetOpenWorksetsConfiguration(worksetConfiguration);
 
                 // This opens the document without activating it in Revit's user interface.
                 Document doc = app.OpenDocumentFile(revitModelPath, openOptions);
 
-                _logger.Success("Revit", $"Successfully opened detached document: {modelPath}", modelName, "OpeningModel");
+                _logger.Success("Revit", $"Successfully opened {(isCloud ? "cloud" : "detached")} document: {modelName}", modelName, "OpeningModel");
                 return doc;
             }
             catch (Exception ex)
@@ -88,7 +84,7 @@ namespace ScheduledNwcExporter.Revit
                 string safeModelName = modelPath.StartsWith("acc://", StringComparison.OrdinalIgnoreCase) 
                     ? modelPath.Split('|')[0].Replace("acc://", "") 
                     : Path.GetFileName(modelPath);
-                _logger.Error("Revit", $"Failed to open model detached: {ex.Message}", safeModelName, "OpeningModel", ex);
+                _logger.Error("Revit", $"Failed to open model: {ex.Message}", safeModelName, "OpeningModel", ex);
                 return null;
             }
         }
