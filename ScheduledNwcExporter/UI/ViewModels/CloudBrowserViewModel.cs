@@ -103,6 +103,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
         public string Name { get; set; }
         public CloudItemType Type { get; set; }
         public string Id { get; set; }
+        public string HubId { get; set; }
         public string ProjectId { get; set; }
         public string VersionId { get; set; }
         public bool IsHub { get; set; }
@@ -145,18 +146,19 @@ namespace ScheduledNwcExporter.UI.ViewModels
                     var projects = await ApsClient.GetProjectsAsync(Id);
                     foreach (var p in projects)
                     {
-                        var pNode = new CloudNode(p.Name, CloudItemType.Folder, p.Id, p.Id) { IsProject = true, ApsClient = ApsClient };
+                        var pNode = new CloudNode(p.Name, CloudItemType.Folder, p.Id, p.Id) 
+                        { 
+                            IsProject = true, 
+                            HubId = Id, // Current node's Id is the HubId
+                            ApsClient = ApsClient 
+                        };
                         pNode.Children.Add(new CloudNode("Loading...", CloudItemType.Folder, null, null));
                         Children.Add(pNode);
                     }
                 }
                 else if (IsProject)
                 {
-                    // HubId is stored in the Parent's Id for a project node
-                    string hubId = Id.StartsWith("b.") ? Id : Id; // Project ID in ACC often starts with b.
-                    // For Top Folders, we need the HubId. In our tree, Hub is the parent of Project.
-                    // Let's use a simpler approach: get top folders using the project id
-                    var topFolders = await ApsClient.GetTopFoldersAsync(null, Id); // HubId is optional for some APS calls or can be null
+                    var topFolders = await ApsClient.GetTopFoldersAsync(HubId, Id);
                     foreach (var folder in topFolders)
                     {
                         var folderNode = new CloudNode(folder.Name, CloudItemType.Folder, folder.Id, ProjectId) { ApsClient = ApsClient };
