@@ -66,7 +66,8 @@ namespace ScheduledNwcExporter.Core
                 hubsList.Add(new Hub 
                 { 
                     Id = item["id"]?.ToString(), 
-                    Name = item.SelectToken("attributes.name")?.ToString() ?? "Unknown Hub" 
+                    Name = item.SelectToken("attributes.name")?.ToString() ?? "Unknown Hub",
+                    Region = item.SelectToken("attributes.region")?.ToString() ?? "US"
                 });
             }
             return hubsList;
@@ -83,7 +84,8 @@ namespace ScheduledNwcExporter.Core
                 projectsList.Add(new Project 
                 { 
                     Id = item["id"]?.ToString(), 
-                    Name = item.SelectToken("attributes.name")?.ToString() ?? "Unknown Project" 
+                    Name = item.SelectToken("attributes.name")?.ToString() ?? "Unknown Project",
+                    RevitProjectGuid = item.SelectToken("attributes.extension.data.projectGuid")?.ToString()
                 });
             }
             return projectsList;
@@ -129,7 +131,8 @@ namespace ScheduledNwcExporter.Core
                         Id = item["id"]?.ToString(), 
                         Name = displayName, 
                         Type = CloudItemType.File,
-                        VersionId = item.SelectToken("relationships.tip.data.id")?.ToString()
+                        VersionId = item.SelectToken("relationships.tip.data.id")?.ToString(),
+                        RevitModelGuid = item.SelectToken("attributes.extension.data.modelGuid")?.ToString()
                     });
                 }
             }
@@ -141,12 +144,14 @@ namespace ScheduledNwcExporter.Core
     {
         public string Id { get; set; }
         public string Name { get; set; }
+        public string Region { get; set; }
     }
 
     public class Project
     {
         public string Id { get; set; }
         public string Name { get; set; }
+        public string RevitProjectGuid { get; set; }
     }
 
     public enum CloudItemType { Folder, File }
@@ -157,5 +162,6 @@ namespace ScheduledNwcExporter.Core
         public string Name { get; set; }
         public CloudItemType Type { get; set; }
         public string VersionId { get; set; }
+        public string RevitModelGuid { get; set; }
     }
 }

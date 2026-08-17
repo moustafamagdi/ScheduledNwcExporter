@@ -239,10 +239,10 @@ namespace ScheduledNwcExporter.Revit.ExternalEvents
             if (string.IsNullOrWhiteSpace(path)) return "Unknown";
             if (path.StartsWith("acc://", StringComparison.OrdinalIgnoreCase))
             {
-                // Format: acc://ModelName.rvt|URN
+                // Format: acc://ModelName.rvt|Region|ProjectGUID|ModelGUID
                 string temp = path.Substring(6);
-                int pipeIndex = temp.IndexOf('|');
-                return pipeIndex > 0 ? temp.Substring(0, pipeIndex) : temp;
+                string[] parts = temp.Split('|');
+                return parts.Length > 0 ? parts[0] : temp;
             }
             return System.IO.Path.GetFileName(path);
         }

@@ -53,14 +53,22 @@ namespace ScheduledNwcExporter.UI.ViewModels
             var cloudWindow = new Views.CloudBrowserWindow(cloudVm);
             if (cloudWindow.ShowDialog() == true && cloudWindow.SelectedNode != null)
             {
-                // Format: acc://ProjectName|ProjectId/ModelName|VersionId.rvt
+                // Format: acc://ModelName.rvt|Region|ProjectGUID|ModelGUID
                 var node = cloudWindow.SelectedNode;
-                string path = $"acc://{node.Name}|{node.VersionId}";
-                if (!path.EndsWith(".rvt", StringComparison.OrdinalIgnoreCase))
+                string modelName = node.Name;
+                if (!modelName.EndsWith(".rvt", StringComparison.OrdinalIgnoreCase))
                 {
-                    path += ".rvt";
+                    modelName += ".rvt";
                 }
-                Job.SourceModelPath = path; 
+
+                // We need at least ProjectGUID and ModelGUID for proper opening
+                if (string.IsNullOrEmpty(node.RevitProjectGuid) || string.IsNullOrEmpty(node.RevitModelGuid))
+                {
+                    System.Windows.MessageBox.Show("This file is not initiated as a Revit Cloud Model and cannot be opened directly. Please ensure it is a workshared cloud model.", "Incompatible Model", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                    return;
+                }
+
+                Job.SourceModelPath = $"acc://{modelName}|{node.Region}|{node.RevitProjectGuid}|{node.RevitModelGuid}"; 
                 OnPropertyChanged(nameof(Job));
                 Validate();
             }

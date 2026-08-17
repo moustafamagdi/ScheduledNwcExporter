@@ -39,30 +39,21 @@ namespace ScheduledNwcExporter.Revit
                 ModelPath revitModelPath;
                 if (isCloud)
                 {
-                    // Format: acc://ModelName.rvt|urn:adsk.wipprod:fs.file:vf.XXXXX
-                    // We must extract the URN and convert it to a proper Cloud ModelPath
-                    string urn = modelPath.Contains("|") ? modelPath.Split('|')[1] : string.Empty;
-                    
-                    if (string.IsNullOrEmpty(urn))
+                    // Format: acc://ModelName.rvt|Region|ProjectGUID|ModelGUID
+                    string[] parts = modelPath.Split('|');
+                    if (parts.Length < 4)
                     {
-                        throw new InvalidOperationException("Cloud model URN is missing from the path.");
+                        throw new InvalidOperationException("Cloud model path is in an invalid format. Please re-select the model.");
                     }
 
-                    // To avoid Revit prepending its install path, we should NOT use ConvertUserVisiblePathToModelPath
-                    // for cloud paths that Revit doesn't recognize as "user visible".
-                    // Instead, we can try to create a Cloud ModelPath.
-                    // Note: This is a simplified version. A production version would resolve the Region, ProjectGuid, and ModelGuid.
-                    try
-                    {
-                        // Try to parse the URN to get GUIDs if possible, or use the URN directly if Revit 2024 supports it
-                        revitModelPath = ModelPathUtils.ConvertUserVisiblePathToModelPath(modelPath);
-                    }
-                    catch
-                    {
-                        // Fallback: If it fails, it's likely because of the custom acc:// prefix
-                        // Let's try removing the prefix and see if Revit recognizes the URN part
-                        revitModelPath = ModelPathUtils.ConvertUserVisiblePathToModelPath(urn);
-                    }
+                    string region = parts[1];
+                    Guid projectGuid = Guid.Parse(parts[2]);
+                    Guid modelGuid = Guid.Parse(parts[3]);
+
+                    _logger.Info("Revit", $"Resolving cloud path: Region={region}, Project={projectGuid}, Model={modelGuid}", modelName, "OpeningModel");
+                    
+                    // The official way to create a Cloud ModelPath in Revit API
+                    revitModelPath = ModelPathUtils.ConvertCloudGUIDsToCloudPath(region, projectGuid, modelGuid);
                 }
                 else
                 {

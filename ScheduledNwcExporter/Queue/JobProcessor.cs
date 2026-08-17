@@ -59,7 +59,7 @@ namespace ScheduledNwcExporter.Queue
             if (isCancellationRequested == null) throw new ArgumentNullException(nameof(isCancellationRequested));
 
             bool isCloud = job.SourceModelPath.StartsWith("acc://", StringComparison.OrdinalIgnoreCase);
-            string modelName = isCloud ? job.SourceModelPath.Split('|')[0].Replace("acc://", "") : Path.GetFileName(job.SourceModelPath);
+            string modelName = isCloud ? job.SourceModelPath.Substring(6).Split('|')[0] : Path.GetFileName(job.SourceModelPath);
             DateTime startedAt = DateTime.Now;
             var result = new JobExecutionResult { ModelName = modelName };
 

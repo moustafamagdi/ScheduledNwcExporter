@@ -78,6 +78,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
                     {
                         IsHub = true,
                         HubId = hub.Id,
+                        Region = hub.Region,
                         ApsClient = _apsClient
                     };
                     // Add a dummy child to show the expander
@@ -113,6 +114,9 @@ namespace ScheduledNwcExporter.UI.ViewModels
         public string HubId { get; set; }
         public string ProjectId { get; set; }
         public string VersionId { get; set; }
+        public string Region { get; set; }
+        public string RevitProjectGuid { get; set; }
+        public string RevitModelGuid { get; set; }
         public bool IsHub { get; set; }
         public bool IsProject { get; set; }
         public APSClient ApsClient { get; set; }
@@ -157,6 +161,8 @@ namespace ScheduledNwcExporter.UI.ViewModels
                         { 
                             IsProject = true, 
                             HubId = Id, // Current node's Id is the HubId
+                            Region = Region,
+                            RevitProjectGuid = p.RevitProjectGuid,
                             ApsClient = ApsClient 
                         };
                         pNode.Children.Add(new CloudNode("Loading...", CloudItemType.Folder, null, null));
@@ -168,7 +174,12 @@ namespace ScheduledNwcExporter.UI.ViewModels
                     var topFolders = await ApsClient.GetTopFoldersAsync(HubId, Id);
                     foreach (var folder in topFolders)
                     {
-                        var folderNode = new CloudNode(folder.Name, CloudItemType.Folder, folder.Id, ProjectId) { ApsClient = ApsClient };
+                        var folderNode = new CloudNode(folder.Name, CloudItemType.Folder, folder.Id, ProjectId) 
+                        { 
+                            Region = Region,
+                            RevitProjectGuid = RevitProjectGuid,
+                            ApsClient = ApsClient 
+                        };
                         folderNode.Children.Add(new CloudNode("Loading...", CloudItemType.Folder, null, null));
                         Children.Add(folderNode);
                     }
@@ -181,6 +192,9 @@ namespace ScheduledNwcExporter.UI.ViewModels
                         var node = new CloudNode(item.Name, item.Type, item.Id, ProjectId) 
                         { 
                             VersionId = item.VersionId,
+                            Region = Region,
+                            RevitProjectGuid = RevitProjectGuid,
+                            RevitModelGuid = item.RevitModelGuid,
                             ApsClient = ApsClient 
                         };
                         if (item.Type == CloudItemType.Folder)

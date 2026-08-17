@@ -62,18 +62,13 @@ namespace ScheduledNwcExporter.Configuration
 
                     if (_sourceModelPath.StartsWith("acc://", StringComparison.OrdinalIgnoreCase))
                     {
-                        // Format: acc://ModelName.rvt|URN
+                        // Format: acc://ModelName.rvt|Region|ProjectGUID|ModelGUID
                         string temp = _sourceModelPath.Substring(6); // Remove acc://
-                        int pipeIndex = temp.IndexOf('|');
-                        if (pipeIndex > 0)
+                        string[] parts = temp.Split('|');
+                        if (parts.Length > 0)
                         {
-                            modelFileName = temp.Substring(0, pipeIndex);
+                            modelFileName = parts[0];
                             modelName = Path.GetFileNameWithoutExtension(modelFileName);
-                        }
-                        else
-                        {
-                            modelFileName = temp;
-                            modelName = Path.GetFileNameWithoutExtension(temp);
                         }
                     }
                     else
