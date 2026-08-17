@@ -2,14 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Autodesk.Forge;
-using Autodesk.Forge.Model;
-using Newtonsoft.Json.Linq;
+using Newtonsoft.Json;
 
 namespace ScheduledNwcExporter.Core
 {
     /// <summary>
     /// Robust client for interacting with Autodesk Platform Services (APS).
-    /// Uses raw JSON parsing to avoid SDK model limitations in .NET 4.8.
+    /// Uses custom POCOs and manual deserialization to avoid SDK model casting issues in .NET 4.8.
     /// </summary>
     public class APSClient
     {
@@ -28,20 +27,18 @@ namespace ScheduledNwcExporter.Core
         public async Task<List<Hub>> GetHubsAsync()
         {
             var hubsList = new List<Hub>();
-            Hubs response = await _hubsApi.GetHubsAsync();
+            dynamic response = await _hubsApi.GetHubsAsync();
+            string json = response.ToJson();
             
-            // response.ToJson() returns the raw API JSON (camelCase)
-            JObject json = JObject.Parse(response.ToJson());
-            var data = json["data"] as JArray;
-            
-            if (data != null)
+            var hubsResponse = JsonConvert.DeserializeObject<ForgeResponse<HubAttributes>>(json);
+            if (hubsResponse?.data != null)
             {
-                foreach (var hub in data)
+                foreach (var item in hubsResponse.data)
                 {
                     hubsList.Add(new Hub 
                     { 
-                        Id = hub["id"]?.ToString(), 
-                        Name = hub.SelectToken("attributes.name")?.ToString() ?? "Unknown Hub" 
+                        Id = item.id, 
+                        Name = item.attributes?.name ?? "Unknown Hub" 
                     });
                 }
             }
@@ -51,19 +48,18 @@ namespace ScheduledNwcExporter.Core
         public async Task<List<Project>> GetProjectsAsync(string hubId)
         {
             var projectsList = new List<Project>();
-            Projects response = await _projectsApi.GetHubProjectsAsync(hubId);
-            
-            JObject json = JObject.Parse(response.ToJson());
-            var data = json["data"] as JArray;
+            dynamic response = await _projectsApi.GetHubProjectsAsync(hubId);
+            string json = response.ToJson();
 
-            if (data != null)
+            var projectsResponse = JsonConvert.DeserializeObject<ForgeResponse<ProjectAttributes>>(json);
+            if (projectsResponse?.data != null)
             {
-                foreach (var project in data)
+                foreach (var item in projectsResponse.data)
                 {
                     projectsList.Add(new Project 
                     { 
-                        Id = project["id"]?.ToString(), 
-                        Name = project.SelectToken("attributes.name")?.ToString() ?? "Unknown Project" 
+                        Id = item.id, 
+                        Name = item.attributes?.name ?? "Unknown Project" 
                     });
                 }
             }
@@ -72,61 +68,108 @@ namespace ScheduledNwcExporter.Core
 
         public async Task<List<CloudItem>> GetTopFoldersAsync(string hubId, string projectId)
         {
-            var items = new List<CloudItem>();
-            TopFolders response = await _projectsApi.GetProjectTopFoldersAsync(hubId, projectId);
-            
-            JObject json = JObject.Parse(response.ToJson());
-            var data = json["data"] as JArray;
+            var itemsList = new List<CloudItem>();
+            dynamic response = await _projectsApi.GetProjectTopFoldersAsync(hubId, projectId);
+            string json = response.ToJson();
 
-            if (data != null)
+            var foldersResponse = JsonConvert.DeserializeObject<ForgeResponse<FolderAttributes>>(json);
+            if (foldersResponse?.data != null)
             {
-                foreach (var folder in data)
+                foreach (var item in foldersResponse.data)
                 {
-                    items.Add(new CloudItem 
+                    itemsList.Add(new CloudItem 
                     { 
-                        Id = folder["id"]?.ToString(), 
-                        Name = folder.SelectToken("attributes.displayName")?.ToString() ?? folder.SelectToken("attributes.name")?.ToString() ?? "Unknown Folder", 
+                        Id = item.id, 
+                        Name = item.attributes?.displayName ?? item.attributes?.name ?? "Unknown Folder", 
                         Type = CloudItemType.Folder 
                     });
                 }
             }
-            return items;
+            return itemsList;
         }
 
         public async Task<List<CloudItem>> GetFolderContentsAsync(string projectId, string folderId)
         {
-            var items = new List<CloudItem>();
-            JsonApiCollection response = await _foldersApi.GetFolderContentsAsync(projectId, folderId);
-            
-            JObject json = JObject.Parse(response.ToJson());
-            var data = json["data"] as JArray;
+            var itemsList = new List<CloudItem>();
+            dynamic response = await _foldersApi.GetFolderContentsAsync(projectId, folderId);
+            string json = response.ToJson();
 
-            if (data != null)
+            var contentsResponse = JsonConvert.DeserializeObject<ForgeResponse<FolderAttributes>>(json);
+            if (contentsResponse?.data != null)
             {
-                foreach (var item in data)
+                foreach (var item in contentsResponse.data)
                 {
-                    string type = item["type"]?.ToString();
-                    string displayName = item.SelectToken("attributes.displayName")?.ToString() ?? item.SelectToken("attributes.name")?.ToString();
+                    string type = item.type;
+                    string displayName = item.attributes?.displayName ?? item.attributes?.name;
                     
                     if (type == "folders")
                     {
-                        items.Add(new CloudItem { Id = item["id"]?.ToString(), Name = displayName, Type = CloudItemType.Folder });
+                        itemsList.Add(new CloudItem { Id = item.id, Name = displayName, Type = CloudItemType.Folder });
                     }
                     else if (type == "items" && !string.IsNullOrEmpty(displayName) && displayName.EndsWith(".rvt", StringComparison.OrdinalIgnoreCase))
                     {
-                        items.Add(new CloudItem 
+                        itemsList.Add(new CloudItem 
                         { 
-                            Id = item["id"]?.ToString(), 
+                            Id = item.id, 
                             Name = displayName, 
                             Type = CloudItemType.File,
-                            VersionId = item.SelectToken("relationships.tip.data.id")?.ToString()
+                            VersionId = item.relationships?.tip?.data?.id
                         });
                     }
                 }
             }
-            return items;
+            return itemsList;
         }
     }
+
+    #region Custom POCOs for JSON:API Deserialization
+
+    public class ForgeResponse<T>
+    {
+        public List<ForgeData<T>> data { get; set; }
+    }
+
+    public class ForgeData<T>
+    {
+        public string id { get; set; }
+        public string type { get; set; }
+        public T attributes { get; set; }
+        public ForgeRelationships relationships { get; set; }
+    }
+
+    public class HubAttributes
+    {
+        public string name { get; set; }
+    }
+
+    public class ProjectAttributes
+    {
+        public string name { get; set; }
+    }
+
+    public class FolderAttributes
+    {
+        public string name { get; set; }
+        public string displayName { get; set; }
+    }
+
+    public class ForgeRelationships
+    {
+        public ForgeRelationshipTip tip { get; set; }
+    }
+
+    public class ForgeRelationshipTip
+    {
+        public ForgeRelationshipData data { get; set; }
+    }
+
+    public class ForgeRelationshipData
+    {
+        public string id { get; set; }
+        public string type { get; set; }
+    }
+
+    #endregion
 
     public class Hub
     {
