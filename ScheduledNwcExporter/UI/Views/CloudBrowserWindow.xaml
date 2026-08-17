@@ -22,7 +22,7 @@
 
         <TextBlock Text="Select a Revit model from Autodesk Construction Cloud:" FontWeight="Bold" Margin="0,0,0,10"/>
 
-        <TreeView Grid.Row="1" ItemsSource="{Binding Nodes}" Margin="0,0,0,10">
+        <TreeView Grid.Row="1" ItemsSource="{Binding Nodes}" Margin="0,0,0,10" SelectedItemChanged="TreeView_SelectedItemChanged">
             <TreeView.ItemContainerStyle>
                 <Style TargetType="TreeViewItem">
                     <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>

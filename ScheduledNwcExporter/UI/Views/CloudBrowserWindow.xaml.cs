@@ -22,5 +22,13 @@ namespace ScheduledNwcExporter.UI.Views
 
             viewModel.RequestClose += () => Close();
         }
+
+        private void TreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
+        {
+            if (DataContext is CloudBrowserViewModel viewModel)
+            {
+                viewModel.SelectedNode = e.NewValue as CloudNode;
+            }
+        }
     }
 }
