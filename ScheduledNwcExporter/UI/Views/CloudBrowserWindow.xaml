@@ -7,7 +7,12 @@
         xmlns:vm="clr-namespace:ScheduledNwcExporter.UI.ViewModels"
         mc:Ignorable="d"
         Title="Hatco Cloud Explorer (ACC / BIM 360)" Height="600" Width="500"
-        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        xmlns:ui="clr-namespace:ScheduledNwcExporter.UI">
+    <Window.Resources>
+        <ui:TypeToIconConverter x:Key="TypeToIconConverter" />
+        <ui:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+    </Window.Resources>
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
