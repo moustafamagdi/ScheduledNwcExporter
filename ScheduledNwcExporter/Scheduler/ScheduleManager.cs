@@ -43,16 +43,36 @@ namespace ScheduledNwcExporter.Scheduler
             if (!_settings.Scheduler.IsSchedulerEnabled) return;
 
             DateTime now = DateTime.Now;
-            int targetHour = _settings.Scheduler.ScheduledHour;
-            int targetMinute = _settings.Scheduler.ScheduledMinute;
 
+            // 1. Check legacy slot for backward compatibility
+            CheckAndTriggerSlot(_settings.Scheduler.ScheduledHour, _settings.Scheduler.ScheduledMinute, null, now);
+
+            // 2. Check all modern slots
+            if (_settings.Scheduler.Slots != null)
+            {
+                foreach (var slot in _settings.Scheduler.Slots)
+                {
+                    if (slot.IsEnabled && slot.Days.Contains(now.DayOfWeek))
+                    {
+                        CheckAndTriggerSlot(slot.Hour, slot.Minute, slot, now);
+                    }
+                }
+            }
+        }
+
+        private void CheckAndTriggerSlot(int targetHour, int targetMinute, ScheduleSlot? slot, DateTime now)
+        {
             if (now.Hour == targetHour && now.Minute == targetMinute)
             {
-                // Ensure we only trigger once per minute/day
-                if (_lastTriggeredDate == null || _lastTriggeredDate.Value.Date != now.Date || _lastTriggeredDate.Value.Hour != now.Hour || _lastTriggeredDate.Value.Minute != now.Minute)
+                // Ensure we only trigger once per minute/day for this specific time
+                if (_lastTriggeredDate == null || 
+                    _lastTriggeredDate.Value.Date != now.Date || 
+                    _lastTriggeredDate.Value.Hour != now.Hour || 
+                    _lastTriggeredDate.Value.Minute != now.Minute)
                 {
                     _lastTriggeredDate = now;
-                    _logger.Info("Scheduler", $"Scheduled execution time reached ({targetHour:D2}:{targetMinute:D2}). Triggering export session.");
+                    string source = slot != null ? "Multi-slot" : "Legacy-slot";
+                    _logger.Info("Scheduler", $"Scheduled execution time reached ({targetHour:D2}:{targetMinute:D2}) via {source}. Triggering export session.");
                     ScheduledTimeReached?.Invoke(this, EventArgs.Empty);
                 }
             }

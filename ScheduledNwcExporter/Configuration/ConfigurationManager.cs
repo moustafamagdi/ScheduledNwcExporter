@@ -251,9 +251,30 @@ namespace ScheduledNwcExporter.Configuration
         public bool FindMissingMaterials { get; set; } = false;
     }
 
+    public class ScheduleSlot
+    {
+        public bool IsEnabled { get; set; } = true;
+        public int Hour { get; set; } = 19;
+        public int Minute { get; set; } = 0;
+        public List<DayOfWeek> Days { get; set; } = new List<DayOfWeek> 
+        { 
+            DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, 
+            DayOfWeek.Thursday, DayOfWeek.Friday 
+        };
+
+        [JsonIgnore]
+        public string TimeDisplay => $"{Hour:D2}:{Minute:D2}";
+        
+        [JsonIgnore]
+        public string DaysDisplay => Days.Count == 7 ? "Daily" : string.Join(", ", Days.Select(d => d.ToString().Substring(0, 3)));
+    }
+
     public class SchedulerSettings
     {
         public bool IsSchedulerEnabled { get; set; } = false;
+        public List<ScheduleSlot> Slots { get; set; } = new List<ScheduleSlot>();
+        
+        // Legacy support
         public int ScheduledHour { get; set; } = 19;
         public int ScheduledMinute { get; set; } = 0;
     }

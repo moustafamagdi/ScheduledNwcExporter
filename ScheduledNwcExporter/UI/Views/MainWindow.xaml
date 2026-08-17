@@ -129,15 +129,30 @@
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
-                    <StackPanel Grid.Column="0" Margin="0,0,10,0">
-                        <TextBlock Text="Automatic Schedule" FontWeight="Bold" Margin="0,0,0,6"/>
-                        <CheckBox Content="Enable Daily Schedule" IsChecked="{Binding IsSchedulerEnabled}" Margin="0,0,0,10"/>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                            <TextBlock Text="Run Every Day at (HH:mm): " VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <TextBox Text="{Binding ScheduledTimeString}" Width="80" Height="25" VerticalContentAlignment="Center"/>
+                    <Grid Grid.Column="0" Margin="0,0,10,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Text="Automatic Schedule Slots" FontWeight="Bold" Margin="0,0,0,6"/>
+                        <CheckBox Grid.Row="1" Content="Enable Global Scheduler" IsChecked="{Binding IsSchedulerEnabled}" Margin="0,0,0,6"/>
+                        
+                        <DataGrid Grid.Row="2" ItemsSource="{Binding ScheduleSlots}" SelectedItem="{Binding SelectedSlot}" AutoGenerateColumns="False" CanUserAddRows="False" Height="100" Background="White" FontSize="11">
+                            <DataGrid.Columns>
+                                <DataGridCheckBoxColumn Header="On" Binding="{Binding IsEnabled}" Width="35"/>
+                                <DataGridTextColumn Header="Time" Binding="{Binding TimeDisplay}" Width="50" IsReadOnly="True"/>
+                                <DataGridTextColumn Header="Days" Binding="{Binding DaysDisplay}" Width="*" IsReadOnly="True"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        
+                        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,5,0,0">
+                            <Button Content=" + Add " Command="{Binding AddSlotCommand}" Width="50" Height="22" FontSize="10" Margin="0,0,5,0"/>
+                            <Button Content=" - Remove " Command="{Binding RemoveSlotCommand}" Width="60" Height="22" FontSize="10"/>
+                            <TextBlock Text="Note: Revit must remain running." FontSize="10" Foreground="Gray" Margin="10,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
-                        <TextBlock Text="Note: Automatic scheduling requires Revit to remain running." FontSize="11" Foreground="Gray" TextWrapping="Wrap"/>
-                    </StackPanel>
+                    </Grid>
 
                     <StackPanel Grid.Column="1" Margin="10,0,0,0">
                         <TextBlock Text="Basic Export Behavior" FontWeight="Bold" Margin="0,0,0,6"/>

@@ -224,6 +224,14 @@ namespace ScheduledNwcExporter.UI.ViewModels
         }
 
         public ObservableCollection<ModelExportJob> Jobs { get; }
+        public ObservableCollection<ScheduleSlot> ScheduleSlots { get; } = new ObservableCollection<ScheduleSlot>();
+
+        private ScheduleSlot? _selectedSlot;
+        public ScheduleSlot? SelectedSlot
+        {
+            get => _selectedSlot;
+            set => SetProperty(ref _selectedSlot, value);
+        }
 
         public ICommand AddModelCommand { get; }
         public ICommand EditModelCommand { get; }
@@ -273,6 +281,10 @@ namespace ScheduledNwcExporter.UI.ViewModels
                 job.CurrentStage = string.Empty;
             }
             Jobs = new ObservableCollection<ModelExportJob>(settings.Jobs);
+            if (settings.Scheduler.Slots != null)
+            {
+                foreach (var slot in settings.Scheduler.Slots) ScheduleSlots.Add(slot);
+            }
 
             // AUDIT FIX: Scheduler lifecycle is now managed at App level. 
             // The ViewModel just listens for UI updates.
@@ -284,6 +296,8 @@ namespace ScheduledNwcExporter.UI.ViewModels
             AddModelCommand = new RelayCommand(AddModel);
             EditModelCommand = new RelayCommand(EditModel, () => SelectedJob != null);
             RemoveModelCommand = new RelayCommand(RemoveModel, () => SelectedJob != null);
+            AddSlotCommand = new RelayCommand(AddSlot);
+            RemoveSlotCommand = new RelayCommand(RemoveSlot, () => SelectedSlot != null);
             RunNowCommand = new RelayCommand(() => StartQueue(Jobs.Where(job => job.IsEnabled), SessionTriggerSource.Manual));
             PauseCommand = new RelayCommand(PauseQueue, () => _queueHandler.IsSessionRunning);
             TestSelectedCommand = new RelayCommand(() =>
@@ -559,13 +573,50 @@ namespace ScheduledNwcExporter.UI.ViewModels
 
         private void SaveJobs()
         {
-            _configManager.CurrentSettings.Jobs = new List<ModelExportJob>(Jobs);
+            _configManager.CurrentSettings.Jobs = Jobs.ToList();
+            _configManager.CurrentSettings.Scheduler.Slots = ScheduleSlots.ToList();
             _configManager.SaveConfiguration();
+        }
+
+        private void AddSlot()
+        {
+            var newSlot = new ScheduleSlot();
+            ScheduleSlots.Add(newSlot);
+            SaveJobs();
+        }
+
+        private void RemoveSlot()
+        {
+            if (SelectedSlot != null)
+            {
+                ScheduleSlots.Remove(SelectedSlot);
+                SaveJobs();
+            }
         }
 
         private void UpdateNextRunText()
         {
-            NextRunText = _isSchedulerEnabled ? $"Daily at {ScheduledTimeString}" : "Scheduler Disabled";
+            if (!_isSchedulerEnabled)
+            {
+                NextRunText = "Scheduler Disabled";
+                return;
+            }
+
+            var activeSlots = ScheduleSlots.Where(s => s.IsEnabled).ToList();
+            if (activeSlots.Count == 0)
+            {
+                NextRunText = "Scheduler Active (No Slots)";
+                return;
+            }
+
+            if (activeSlots.Count == 1)
+            {
+                NextRunText = $"Next run: {activeSlots[0].TimeDisplay} ({activeSlots[0].DaysDisplay})";
+            }
+            else
+            {
+                NextRunText = $"Scheduler Active ({activeSlots.Count} slots)";
+            }
         }
     }
 
