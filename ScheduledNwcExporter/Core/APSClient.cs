@@ -140,15 +140,27 @@ namespace ScheduledNwcExporter.Core
                     {
                         try
                         {
+                            // FIX: Must set the token for the new API instance
                             var versionsApi = new Autodesk.Forge.VersionsApi();
+                            versionsApi.Configuration.AccessToken = _accessToken;
+                            
                             dynamic vResponse = await versionsApi.GetVersionAsync(projectId, versionId);
                             JObject vJson = GetRawJObject(vResponse);
                             var vData = vJson["data"];
                             
-                            cloudItem.RevitModelGuid = vData?.SelectToken("attributes.extension.data.modelGuid")?.ToString();
-                            cloudItem.RevitProjectGuid = vData?.SelectToken("attributes.extension.data.projectGuid")?.ToString();
+                            string mGuid = vData?.SelectToken("attributes.extension.data.modelGuid")?.ToString();
+                            string pGuid = vData?.SelectToken("attributes.extension.data.projectGuid")?.ToString();
+
+                            // Ensure GUIDs are not null before assigning
+                            if (!string.IsNullOrEmpty(mGuid)) cloudItem.RevitModelGuid = mGuid;
+                            if (!string.IsNullOrEmpty(pGuid)) cloudItem.RevitProjectGuid = pGuid;
+                            
+                            _logger.Info("CloudBrowser", $"Extracted GUIDs for {displayName}: Model={cloudItem.RevitModelGuid}, Project={cloudItem.RevitProjectGuid}");
                         }
-                        catch { /* Fallback to item data if version fetch fails */ }
+                        catch (Exception ex)
+                        {
+                            _logger.Warning("CloudBrowser", $"Failed to fetch version GUIDs for {displayName}: {ex.Message}");
+                        }
                     }
 
                     itemsList.Add(cloudItem);
