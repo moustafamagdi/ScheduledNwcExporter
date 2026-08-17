@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RevitAddIns>
   <AddIn Type="Application">
-    <Name>Scheduled NWC Export Manager</Name>
-    <Assembly>ScheduledNwcExporter\ScheduledNwcExporter.dll</Assembly>
+    <Name>Hatco NWC Exporter</Name>
+    <Assembly>HatcoNwcExporter\ScheduledNwcExporter.dll</Assembly>
     <FullClassName>ScheduledNwcExporter.Application.App</FullClassName>
-    <ClientId>8f9b2c3a-4e1d-4c6a-8b9f-1a2b3c4d5e6f</ClientId>
-    <VendorId>MFBG</VendorId>
-    <VendorDescription>BIM Automation Specialists, Moustafa Magdi</VendorDescription>
+    <ClientId>8456673b-3141-4567-9123-654987abcde1</ClientId>
+    <VendorId>Hatco</VendorId>
+    <VendorDescription>Hatco BIM Tools, https://hatco.com.sa</VendorDescription>
   </AddIn>
 </RevitAddIns>

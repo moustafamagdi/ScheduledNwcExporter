@@ -29,20 +29,15 @@ namespace ScheduledNwcExporter.UI.Views
             {
                 InitializeComponent();
 
-                var configurationManager = new ConfigurationManager();
-                _logger = new FileLogger
-                {
-                    DebugMode = configurationManager.CurrentSettings.DebugMode
-                };
+                // AUDIT FIX: Use App-level services for consistent lifecycle
+                _logger = App.Logger ?? new FileLogger();
+                _exportQueueHandler = App.QueueHandler ?? throw new InvalidOperationException("Queue handler not initialized.");
+                _exportQueueEvent = App.QueueEvent ?? throw new InvalidOperationException("External event not initialized.");
 
                 // Attach a global exception handler for this window's dispatcher
                 this.Dispatcher.UnhandledException += Dispatcher_UnhandledException;
 
-                _exportQueueHandler = new ExportQueueExternalEventHandler(_logger, configurationManager.CurrentSettings, Dispatcher);
-                _exportQueueEvent = ExternalEvent.Create(_exportQueueHandler);
-                _exportQueueHandler.AttachExternalEvent(_exportQueueEvent);
-
-                _viewModel = new MainViewModel(configurationManager, _logger, _exportQueueHandler);
+                _viewModel = new MainViewModel(App.ConfigManager ?? new ConfigurationManager(), _logger, _exportQueueHandler, App.Scheduler);
                 DataContext = _viewModel;
                 Closed += MainWindow_Closed;
 
@@ -146,7 +141,7 @@ namespace ScheduledNwcExporter.UI.Views
             try
             {
                 _viewModel?.Shutdown();
-                _exportQueueEvent?.Dispose();
+                // AUDIT FIX: Do NOT dispose App-level event here, just detach VM listeners
             }
             catch { /* Ignore cleanup errors */ }
         }

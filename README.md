@@ -20,6 +20,8 @@ Production-grade automated batch NWC export manager for **Autodesk Revit 2024**,
 - **Performance Mode (Temporary No-Link Copy)**: Copies the source `.rvt` to a local temporary directory and marks top-level Revit links as unloaded via `TransmissionData` before opening. The original RVT remains completely untouched.
 - **Safe Revit API Integration**: Implements Autodesk's `IExternalEventHandler` pattern. The modeless WPF interface communicates exclusively through `ExternalEvent.Raise()`, keeping all Revit API calls (`OpenDocumentFile`, `Document.Export`, `Close`) strictly within valid Revit execution cycles.
 - **Robust Batch Queue**: Independent per-model try/catch boundary with configurable retries. A failure in one model logs the error and automatically continues with the rest of the batch.
+- **Cloud Integration (ACC/BIM 360)**: Integrated **Hatco Cloud Explorer** with Zero-Login authentication (leverages active Revit session). Supports browsing Hubs, Projects, and Folders to export cloud-hosted models directly.
+- **Unattended Background Scheduling**: High-reliability scheduler that persists even when the tool window is closed. Automatically suppresses blocking UI dialogs during scheduled runs for 100% unattended overnight processing.
 - **Local Persistence & Structured Logging**: Saves settings and job queues in `%appdata%\MoustafaMagdi\ScheduledNwcExporter\config.json` and records session diagnostics in structured log files.
 
 ---
@@ -38,14 +40,28 @@ Production-grade automated batch NWC export manager for **Autodesk Revit 2024**,
 
 ---
 
-## 3. Installation
+## 3. Deployment & Installation
 
-1. Copy the compiled build output (`ScheduledNwcExporter.dll`, `ScheduledNwcExporter.pdb`, `Newtonsoft.Json.dll`, and `ScheduledNwcExporter.addin`) to your Revit add-ins folder:
+To ensure stability and prevent library conflicts, the tool uses a subfolder-based deployment structure.
+
+1. Create a subfolder named `HatcoNwcExporter` inside your Revit add-ins directory:
+   ```text
+   %appdata%\Autodesk\Revit\Addins\2024\HatcoNwcExporter\
+   ```
+2. Copy **all** DLL files from the build output into this subfolder. Required files include:
+   - `ScheduledNwcExporter.dll`
+   - `Autodesk.Forge.dll`
+   - `Newtonsoft.Json.dll`
+   - `RestSharp.dll`
+   - `Microsoft.CSharp.dll` (and other System/Microsoft compatibility libraries)
+3. Copy the `ScheduledNwcExporter.addin` manifest file directly into the parent folder:
    ```text
    %appdata%\Autodesk\Revit\Addins\2024\
    ```
-2. Launch **Autodesk Revit 2024**.
-3. Locate the **Hatco** tab on the Revit ribbon to launch the exporter.
+4. Launch **Autodesk Revit 2024**.
+5. Locate the **Hatco** tab on the Revit ribbon to launch the exporter.
+
+*Note: The tool is designed to work even from the Revit Home screen (no project open).*
 
 ---
 

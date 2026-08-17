@@ -88,11 +88,34 @@ namespace ScheduledNwcExporter.Revit
             Directory.CreateDirectory(temporaryDirectory);
 
             string temporaryModelPath = Path.Combine(temporaryDirectory, Path.GetFileName(sourceModelPath));
+            
+            // AUDIT FIX: Implement retry logic for copying live central models that might be momentarily locked
+            const int maxRetries = 3;
+            const int delayMs = 2000;
+
+            for (int i = 1; i <= maxRetries; i++)
+            {
+                try
+                {
+                    _logger.Info("PerformanceMode", $"Creating temporary copy (Attempt {i}/{maxRetries}): {modelName}", modelName, "PreparingTemporaryCopy");
+                    File.Copy(sourceModelPath, temporaryModelPath, true);
+                    break;
+                }
+                catch (IOException) when (i < maxRetries)
+                {
+                    _logger.Warning("PerformanceMode", $"Model file is currently locked by another process. Retrying in {delayMs/1000}s...", modelName, "PreparingTemporaryCopy");
+                    System.Threading.Thread.Sleep(delayMs);
+                }
+                catch (Exception ex)
+                {
+                    TryDeleteTemporaryDirectory(temporaryDirectory, modelName);
+                    _logger.Error("PerformanceMode", $"Failed to create temporary copy: {ex.Message}", modelName, "PreparingTemporaryCopy", ex);
+                    throw;
+                }
+            }
+
             try
             {
-                _logger.Info("PerformanceMode", "Creating an isolated local temporary copy with Revit links disabled.", modelName, "PreparingTemporaryCopy");
-                File.Copy(sourceModelPath, temporaryModelPath, false);
-
                 int disabledCount = DisableTopLevelRevitLinks(temporaryModelPath, modelName);
                 _logger.Info(
                     "PerformanceMode",

@@ -238,11 +238,12 @@ namespace ScheduledNwcExporter.UI.ViewModels
         public ICommand ImportSettingsCommand { get; }
         // Removed separate job commands in favor of unified settings export/import
 
-        public MainViewModel(ConfigurationManager configManager, ILogger logger, ExportQueueExternalEventHandler queueHandler)
+        public MainViewModel(ConfigurationManager configManager, ILogger logger, ExportQueueExternalEventHandler queueHandler, ScheduleManager? scheduleManager)
         {
             _configManager = configManager ?? throw new ArgumentNullException(nameof(configManager));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _queueHandler = queueHandler ?? throw new ArgumentNullException(nameof(queueHandler));
+            _scheduleManager = scheduleManager ?? throw new ArgumentNullException(nameof(scheduleManager));
             _uiDispatcher = Dispatcher.CurrentDispatcher;
 
             AppSettings settings = _configManager.CurrentSettings;
@@ -272,24 +273,21 @@ namespace ScheduledNwcExporter.UI.ViewModels
             }
             Jobs = new ObservableCollection<ModelExportJob>(settings.Jobs);
 
-            _scheduleManager = new ScheduleManager(settings, _logger);
-            _scheduleManager.ScheduledTimeReached += (_, __) => StartQueue(Jobs.Where(job => job.IsEnabled));
-            if (_isSchedulerEnabled)
-            {
-                _scheduleManager.Start();
-            }
-
+            // AUDIT FIX: Scheduler lifecycle is now managed at App level. 
+            // The ViewModel just listens for UI updates.
+            _scheduleManager.ScheduledTimeReached += ScheduleManager_ScheduledTimeReached;
+            
             _queueHandler.ProgressChanged += QueueHandler_ProgressChanged;
             _queueHandler.SessionCompleted += QueueHandler_SessionCompleted;
 
             AddModelCommand = new RelayCommand(AddModel);
             EditModelCommand = new RelayCommand(EditModel, () => SelectedJob != null);
             RemoveModelCommand = new RelayCommand(RemoveModel, () => SelectedJob != null);
-            RunNowCommand = new RelayCommand(() => StartQueue(Jobs.Where(job => job.IsEnabled)));
+            RunNowCommand = new RelayCommand(() => StartQueue(Jobs.Where(job => job.IsEnabled), SessionTriggerSource.Manual));
             PauseCommand = new RelayCommand(PauseQueue, () => _queueHandler.IsSessionRunning);
             TestSelectedCommand = new RelayCommand(() =>
             {
-                if (SelectedJob != null) StartQueue(new[] { SelectedJob });
+                if (SelectedJob != null) StartQueue(new[] { SelectedJob }, SessionTriggerSource.Manual);
             }, () => SelectedJob != null && !_queueHandler.IsSessionRunning);
             ViewLogCommand = new RelayCommand(ViewLogFile);
             OpenSettingsCommand = new RelayCommand(OpenDiagnostics);
@@ -302,8 +300,8 @@ namespace ScheduledNwcExporter.UI.ViewModels
 
         public void Shutdown()
         {
-            _scheduleManager.Stop();
-            _queueHandler.RequestCancellation();
+            // AUDIT FIX: Do NOT stop the scheduler on window close. It must persist at App level.
+            _scheduleManager.ScheduledTimeReached -= ScheduleManager_ScheduledTimeReached;
             _queueHandler.ProgressChanged -= QueueHandler_ProgressChanged;
             _queueHandler.SessionCompleted -= QueueHandler_SessionCompleted;
         }
@@ -345,18 +343,28 @@ namespace ScheduledNwcExporter.UI.ViewModels
             SaveJobs();
         }
 
-        private void StartQueue(IEnumerable<ModelExportJob> jobs)
+        private void StartQueue(IEnumerable<ModelExportJob> jobs, SessionTriggerSource triggerSource = SessionTriggerSource.Manual)
         {
             if (_queueHandler.IsSessionRunning)
             {
-                MessageBox.Show("An export session is already running.", "Scheduled NWC Export Manager", MessageBoxButton.OK, MessageBoxImage.Warning);
+                if (triggerSource == SessionTriggerSource.Manual)
+                {
+                    MessageBox.Show("An export session is already running.", "Scheduled NWC Export Manager", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+                else
+                {
+                    _logger.Warning("Scheduler", "A scheduled export was skipped because a session is already in progress.");
+                }
                 return;
             }
 
             var jobList = jobs.ToList();
             if (jobList.Count == 0)
             {
-                MessageBox.Show("There are no enabled export jobs to run.", "Scheduled NWC Export Manager", MessageBoxButton.OK, MessageBoxImage.Information);
+                if (triggerSource == SessionTriggerSource.Manual)
+                {
+                    MessageBox.Show("There are no enabled export jobs to run.", "Scheduled NWC Export Manager", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
                 return;
             }
 
@@ -368,10 +376,13 @@ namespace ScheduledNwcExporter.UI.ViewModels
             _sessionStartTime = DateTime.Now;
             _totalJobsInSession = jobList.Count;
 
-            if (!_queueHandler.Start(jobList))
+            if (!_queueHandler.Start(jobList, triggerSource))
             {
                 CurrentActivityStage = "Unable to queue export session.";
-                MessageBox.Show("The export queue could not be started. The add-in may be shutting down.", "Scheduled NWC Export Manager", MessageBoxButton.OK, MessageBoxImage.Error);
+                if (triggerSource == SessionTriggerSource.Manual)
+                {
+                    MessageBox.Show("The export queue could not be started. The add-in may be shutting down.", "Scheduled NWC Export Manager", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
             }
         }
 
@@ -411,23 +422,29 @@ namespace ScheduledNwcExporter.UI.ViewModels
             OverallProgressPercentage = 100;
             SaveJobs();
 
-            // Use the dispatcher passed to the constructor instead of Application.Current.Dispatcher
-            // which can be null in some Revit environments.
-            _uiDispatcher.BeginInvoke(new Action(() =>
+            // AUDIT FIX: Only show MessageBox for manual runs. Scheduled runs should remain unattended.
+            if (summary.TriggerSource == SessionTriggerSource.Manual)
             {
-                string message = $"Export session finished.\n\nTotal: {summary.TotalModels}\nSuccessful: {summary.Successful}\nFailed: {summary.Failed}\nSkipped: {summary.Skipped}\nCancelled: {summary.Cancelled}\nDuration: {summary.Duration:hh\\:mm\\:ss}";
-                if (summary.FailedModels.Count > 0)
+                _uiDispatcher.BeginInvoke(new Action(() =>
                 {
-                    message += "\n\nFailed Models:\n- " + string.Join("\n- ", summary.FailedModels);
-                }
-                if (!string.IsNullOrWhiteSpace(summary.SessionError))
-                {
-                    message += $"\n\nSession Error:\n{summary.SessionError}";
-                }
+                    string message = $"Export session finished.\n\nTotal: {summary.TotalModels}\nSuccessful: {summary.Successful}\nFailed: {summary.Failed}\nSkipped: {summary.Skipped}\nCancelled: {summary.Cancelled}\nDuration: {summary.Duration:hh\\:mm\\:ss}";
+                    if (summary.FailedModels.Count > 0)
+                    {
+                        message += "\n\nFailed Models:\n- " + string.Join("\n- ", summary.FailedModels);
+                    }
+                    if (!string.IsNullOrWhiteSpace(summary.SessionError))
+                    {
+                        message += $"\n\nSession Error:\n{summary.SessionError}";
+                    }
 
-                MessageBox.Show(message, "Scheduled NWC Export Manager", MessageBoxButton.OK,
-                    summary.Failed > 0 || !string.IsNullOrWhiteSpace(summary.SessionError) ? MessageBoxImage.Warning : MessageBoxImage.Information);
-            }), DispatcherPriority.Background);
+                    MessageBox.Show(message, "Scheduled NWC Export Manager", MessageBoxButton.OK,
+                        summary.Failed > 0 || !string.IsNullOrWhiteSpace(summary.SessionError) ? MessageBoxImage.Warning : MessageBoxImage.Information);
+                }), DispatcherPriority.Background);
+            }
+            else
+            {
+                _logger.Info("Scheduler", $"Scheduled export session completed. Successful: {summary.Successful}, Failed: {summary.Failed}. Check log for details.");
+            }
         }
 
         private void ViewLogFile()
@@ -536,21 +553,5 @@ namespace ScheduledNwcExporter.UI.ViewModels
         }
     }
 
-    public class BindableBase : System.ComponentModel.INotifyPropertyChanged
-    {
-        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
 
-        protected bool SetProperty<T>(ref T storage, T value, [System.Runtime.CompilerServices.CallerMemberName] string propertyName = "")
-        {
-            if (Equals(storage, value)) return false;
-            storage = value;
-            OnPropertyChanged(propertyName);
-            return true;
-        }
-
-        protected void OnPropertyChanged([System.Runtime.CompilerServices.CallerMemberName] string propertyName = "")
-        {
-            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(propertyName));
-        }
-    }
 }

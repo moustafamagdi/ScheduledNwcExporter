@@ -19,6 +19,8 @@ namespace ScheduledNwcExporter.Revit.ExternalEvents
         public int PercentComplete => TotalJobs == 0 ? 0 : (int)Math.Round(100d * CompletedJobs / TotalJobs);
     }
 
+    public enum SessionTriggerSource { Manual, Scheduler }
+
     public sealed class ExportSessionSummary : EventArgs
     {
         public int TotalModels { get; set; }
@@ -29,6 +31,7 @@ namespace ScheduledNwcExporter.Revit.ExternalEvents
         public TimeSpan Duration { get; set; }
         public string SessionError { get; set; } = string.Empty;
         public List<string> FailedModels { get; } = new List<string>();
+        public SessionTriggerSource TriggerSource { get; set; } = SessionTriggerSource.Manual;
     }
 
     /// <summary>
@@ -69,7 +72,7 @@ namespace ScheduledNwcExporter.Revit.ExternalEvents
         /// <summary>
         /// Starts a queue by raising the Revit-owned external event. No Revit API access happens in this method.
         /// </summary>
-        public bool Start(IEnumerable<ModelExportJob> jobs)
+        public bool Start(IEnumerable<ModelExportJob> jobs, SessionTriggerSource triggerSource = SessionTriggerSource.Manual)
         {
             if (IsSessionRunning || _externalEvent == null)
             {
@@ -92,6 +95,7 @@ namespace ScheduledNwcExporter.Revit.ExternalEvents
             _summary.Duration = TimeSpan.Zero;
             _summary.SessionError = string.Empty;
             _summary.FailedModels.Clear();
+            _summary.TriggerSource = triggerSource;
 
             _logger.Info("Scheduler", $"Export session queued. Total models: {_summary.TotalModels}.");
             
