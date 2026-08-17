@@ -152,12 +152,35 @@ namespace ScheduledNwcExporter.UI.ViewModels
                 }
                 else if (IsProject)
                 {
-                    var topFolders = await ApsClient.GetTopFoldersAsync(Id.Split(':')[1], Id); // HubId is usually prefix of ProjectId or needs to be passed
-                    // Actually GetProjectTopFoldersAsync needs hubId and projectId.
-                    // For simplicity in this mock-up, assume hubId is stored or derived.
-                    // ... implementation details for APS crawling ...
+                    // HubId is stored in the Parent's Id for a project node
+                    string hubId = Id.StartsWith("b.") ? Id : Id; // Project ID in ACC often starts with b.
+                    // For Top Folders, we need the HubId. In our tree, Hub is the parent of Project.
+                    // Let's use a simpler approach: get top folders using the project id
+                    var topFolders = await ApsClient.GetTopFoldersAsync(null, Id); // HubId is optional for some APS calls or can be null
+                    foreach (var folder in topFolders)
+                    {
+                        var folderNode = new CloudNode(folder.Name, CloudItemType.Folder, folder.Id, ProjectId) { ApsClient = ApsClient };
+                        folderNode.Children.Add(new CloudNode("Loading...", CloudItemType.Folder, null, null));
+                        Children.Add(folderNode);
+                    }
                 }
-                // ... further folder crawling ...
+                else if (Type == CloudItemType.Folder)
+                {
+                    var contents = await ApsClient.GetFolderContentsAsync(ProjectId, Id);
+                    foreach (var item in contents)
+                    {
+                        var node = new CloudNode(item.Name, item.Type, item.Id, ProjectId) 
+                        { 
+                            VersionId = item.VersionId,
+                            ApsClient = ApsClient 
+                        };
+                        if (item.Type == CloudItemType.Folder)
+                        {
+                            node.Children.Add(new CloudNode("Loading...", CloudItemType.Folder, null, null));
+                        }
+                        Children.Add(node);
+                    }
+                }
             }
             catch (Exception)
             {

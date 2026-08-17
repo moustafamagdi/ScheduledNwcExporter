@@ -26,9 +26,9 @@ namespace ScheduledNwcExporter.Core
         {
             var hubs = new List<Hub>();
             dynamic response = await _hubsApi.GetHubsAsync();
-            foreach (var hub in response.data)
+            foreach (var hub in response.Data)
             {
-                hubs.Add(new Hub { Id = hub.id, Name = hub.attributes.name });
+                hubs.Add(new Hub { Id = hub.Id, Name = hub.Attributes.Name });
             }
             return hubs;
         }
@@ -37,9 +37,9 @@ namespace ScheduledNwcExporter.Core
         {
             var projects = new List<Project>();
             dynamic response = await _projectsApi.GetHubProjectsAsync(hubId);
-            foreach (var project in response.data)
+            foreach (var project in response.Data)
             {
-                projects.Add(new Project { Id = project.id, Name = project.attributes.name });
+                projects.Add(new Project { Id = project.Id, Name = project.Attributes.Name });
             }
             return projects;
         }
@@ -48,12 +48,12 @@ namespace ScheduledNwcExporter.Core
         {
             var items = new List<CloudItem>();
             dynamic response = await _projectsApi.GetProjectTopFoldersAsync(hubId, projectId);
-            foreach (var folder in response.data)
+            foreach (var folder in response.Data)
             {
                 items.Add(new CloudItem 
                 { 
-                    Id = folder.id, 
-                    Name = folder.attributes.displayName, 
+                    Id = folder.Id, 
+                    Name = folder.Attributes.DisplayName, 
                     Type = CloudItemType.Folder 
                 });
             }
@@ -64,23 +64,23 @@ namespace ScheduledNwcExporter.Core
         {
             var items = new List<CloudItem>();
             dynamic response = await _foldersApi.GetFolderContentsAsync(projectId, folderId);
-            foreach (var item in response.data)
+            foreach (var item in response.Data)
             {
-                string type = item.type;
-                string displayName = item.attributes.displayName;
+                string type = item.Type;
+                string displayName = item.Attributes.DisplayName;
                 
                 if (type == "folders")
                 {
-                    items.Add(new CloudItem { Id = item.id, Name = displayName, Type = CloudItemType.Folder });
+                    items.Add(new CloudItem { Id = item.Id, Name = displayName, Type = CloudItemType.Folder });
                 }
                 else if (type == "items" && displayName.EndsWith(".rvt", StringComparison.OrdinalIgnoreCase))
                 {
                     items.Add(new CloudItem 
                     { 
-                        Id = item.id, 
+                        Id = item.Id, 
                         Name = displayName, 
                         Type = CloudItemType.File,
-                        VersionId = item.relationships.tip.data.id
+                        VersionId = item.Relationships.Tip.Data.Id
                     });
                 }
             }
