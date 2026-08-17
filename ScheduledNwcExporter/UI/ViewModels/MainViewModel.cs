@@ -409,7 +409,9 @@ namespace ScheduledNwcExporter.UI.ViewModels
             OverallProgressPercentage = 100;
             SaveJobs();
 
-            System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() =>
+            // Use the dispatcher passed to the constructor instead of Application.Current.Dispatcher
+            // which can be null in some Revit environments.
+            _uiDispatcher.BeginInvoke(new Action(() =>
             {
                 string message = $"Export session finished.\n\nTotal: {summary.TotalModels}\nSuccessful: {summary.Successful}\nFailed: {summary.Failed}\nSkipped: {summary.Skipped}\nCancelled: {summary.Cancelled}\nDuration: {summary.Duration:hh\\:mm\\:ss}";
                 if (summary.FailedModels.Count > 0)

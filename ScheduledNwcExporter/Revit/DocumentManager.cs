@@ -43,7 +43,7 @@ namespace ScheduledNwcExporter.Revit
                     string[] parts = modelPath.Split('|');
                     if (parts.Length < 4)
                     {
-                        throw new InvalidOperationException("Cloud model path is in an invalid format. Please re-select the model.");
+                        throw new InvalidOperationException("This cloud model was added using an older version of the tool. Please REMOVE it from the list and re-add it using the '+ Add Model' > 'Cloud' button to capture the required Revit GUIDs.");
                     }
 
                     string region = parts[1];
