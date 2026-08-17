@@ -181,5 +181,6 @@ namespace ScheduledNwcExporter.Core
         public CloudItemType Type { get; set; }
         public string VersionId { get; set; }
         public string RevitModelGuid { get; set; }
+        public string RevitProjectGuid { get; set; }
     }
 }
