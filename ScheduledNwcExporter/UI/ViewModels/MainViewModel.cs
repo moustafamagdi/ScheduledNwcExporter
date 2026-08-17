@@ -240,7 +240,62 @@ namespace ScheduledNwcExporter.UI.ViewModels
         public ScheduleSlot? SelectedSlot
         {
             get => _selectedSlot;
-            set => SetProperty(ref _selectedSlot, value);
+            set
+            {
+                if (SetProperty(ref _selectedSlot, value))
+                {
+                    OnPropertyChanged(nameof(HasSelectedSlot));
+                    RefreshSelectedSlotDayFlags();
+                    (RemoveSlotCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                }
+            }
+        }
+
+        public bool HasSelectedSlot => SelectedSlot != null;
+
+        public List<int> ScheduleHours { get; } = Enumerable.Range(0, 24).ToList();
+        public List<int> ScheduleMinutes { get; } = Enumerable.Range(0, 60).ToList();
+
+        public bool IsMonday
+        {
+            get => IsSelectedSlotScheduledOn(DayOfWeek.Monday);
+            set => SetSelectedSlotDay(DayOfWeek.Monday, value);
+        }
+
+        public bool IsTuesday
+        {
+            get => IsSelectedSlotScheduledOn(DayOfWeek.Tuesday);
+            set => SetSelectedSlotDay(DayOfWeek.Tuesday, value);
+        }
+
+        public bool IsWednesday
+        {
+            get => IsSelectedSlotScheduledOn(DayOfWeek.Wednesday);
+            set => SetSelectedSlotDay(DayOfWeek.Wednesday, value);
+        }
+
+        public bool IsThursday
+        {
+            get => IsSelectedSlotScheduledOn(DayOfWeek.Thursday);
+            set => SetSelectedSlotDay(DayOfWeek.Thursday, value);
+        }
+
+        public bool IsFriday
+        {
+            get => IsSelectedSlotScheduledOn(DayOfWeek.Friday);
+            set => SetSelectedSlotDay(DayOfWeek.Friday, value);
+        }
+
+        public bool IsSaturday
+        {
+            get => IsSelectedSlotScheduledOn(DayOfWeek.Saturday);
+            set => SetSelectedSlotDay(DayOfWeek.Saturday, value);
+        }
+
+        public bool IsSunday
+        {
+            get => IsSelectedSlotScheduledOn(DayOfWeek.Sunday);
+            set => SetSelectedSlotDay(DayOfWeek.Sunday, value);
         }
 
         public ICommand AddModelCommand { get; }
@@ -300,8 +355,13 @@ namespace ScheduledNwcExporter.UI.ViewModels
             Jobs = new ObservableCollection<ModelExportJob>(settings.Jobs);
             if (settings.Scheduler.Slots != null)
             {
-                foreach (var slot in settings.Scheduler.Slots) ScheduleSlots.Add(slot);
+                foreach (var slot in settings.Scheduler.Slots)
+                {
+                    SubscribeToSlotChanges(slot);
+                    ScheduleSlots.Add(slot);
+                }
             }
+            SelectedSlot = ScheduleSlots.FirstOrDefault();
 
             // AUDIT FIX: Scheduler lifecycle is now managed at App level. 
             // The ViewModel just listens for UI updates.
@@ -582,14 +642,22 @@ namespace ScheduledNwcExporter.UI.ViewModels
                         Jobs.Add(job);
                     }
 
+                    foreach (var existingSlot in ScheduleSlots)
+                    {
+                        existingSlot.PropertyChanged -= ScheduleSlot_PropertyChanged;
+                    }
+
                     ScheduleSlots.Clear();
                     if (settings.Scheduler.Slots != null)
                     {
                         foreach (var slot in settings.Scheduler.Slots)
                         {
+                            SubscribeToSlotChanges(slot);
                             ScheduleSlots.Add(slot);
                         }
                     }
+
+                    SelectedSlot = ScheduleSlots.FirstOrDefault();
 
                     MessageBox.Show("Configuration imported successfully. UI and queue have been updated.", "Hatco NWC Exporter", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
@@ -610,17 +678,73 @@ namespace ScheduledNwcExporter.UI.ViewModels
         private void AddSlot()
         {
             var newSlot = new ScheduleSlot();
+            SubscribeToSlotChanges(newSlot);
             ScheduleSlots.Add(newSlot);
+            SelectedSlot = newSlot;
             SaveJobs();
+            UpdateNextRunText();
         }
 
         private void RemoveSlot()
         {
             if (SelectedSlot != null)
             {
-                ScheduleSlots.Remove(SelectedSlot);
+                var slotToRemove = SelectedSlot;
+                slotToRemove.PropertyChanged -= ScheduleSlot_PropertyChanged;
+                ScheduleSlots.Remove(slotToRemove);
+                SelectedSlot = ScheduleSlots.FirstOrDefault();
                 SaveJobs();
+                UpdateNextRunText();
             }
+        }
+
+        private void SubscribeToSlotChanges(ScheduleSlot slot)
+        {
+            slot.PropertyChanged -= ScheduleSlot_PropertyChanged;
+            slot.PropertyChanged += ScheduleSlot_PropertyChanged;
+        }
+
+        private void ScheduleSlot_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            SaveJobs();
+            UpdateNextRunText();
+            if (ReferenceEquals(sender, SelectedSlot))
+            {
+                RefreshSelectedSlotDayFlags();
+            }
+        }
+
+        private bool IsSelectedSlotScheduledOn(DayOfWeek day)
+        {
+            return SelectedSlot != null && SelectedSlot.Days != null && SelectedSlot.Days.Contains(day);
+        }
+
+        private void SetSelectedSlotDay(DayOfWeek day, bool isScheduled)
+        {
+            if (SelectedSlot == null) return;
+
+            var updatedDays = new List<DayOfWeek>(SelectedSlot.Days ?? new List<DayOfWeek>());
+            if (isScheduled && !updatedDays.Contains(day))
+            {
+                updatedDays.Add(day);
+            }
+            else if (!isScheduled)
+            {
+                updatedDays.Remove(day);
+            }
+
+            SelectedSlot.Days = updatedDays.OrderBy(d => (int)d).ToList();
+        }
+
+        private void RefreshSelectedSlotDayFlags()
+        {
+            OnPropertyChanged(nameof(IsMonday));
+            OnPropertyChanged(nameof(IsTuesday));
+            OnPropertyChanged(nameof(IsWednesday));
+            OnPropertyChanged(nameof(IsThursday));
+            OnPropertyChanged(nameof(IsFriday));
+            OnPropertyChanged(nameof(IsSaturday));
+            OnPropertyChanged(nameof(IsSunday));
         }
 
         private void UpdateNextRunText()
