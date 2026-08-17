@@ -2,13 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Autodesk.Forge;
-using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace ScheduledNwcExporter.Core
 {
     /// <summary>
-    /// Robust client for interacting with Autodesk Platform Services (APS).
-    /// Uses custom POCOs and manual deserialization to avoid SDK model casting issues in .NET 4.8.
+    /// Extremely resilient client for interacting with Autodesk Platform Services (APS).
+    /// Handles inconsistencies in Forge SDK response formats across different environments.
     /// </summary>
     public class APSClient
     {
@@ -24,23 +24,50 @@ namespace ScheduledNwcExporter.Core
             _foldersApi = new FoldersApi();
         }
 
+        private JObject GetRawJObject(dynamic response)
+        {
+            if (response == null) return new JObject();
+            
+            // Handle cases where ToJson() returns JObject or string
+            var raw = response.ToJson();
+            if (raw is JObject jObject) return jObject;
+            
+            string jsonString = raw?.ToString() ?? "{}";
+            return JObject.Parse(jsonString);
+        }
+
+        private IEnumerable<JToken> GetDataItems(JObject json)
+        {
+            var data = json["data"];
+            if (data == null) yield break;
+
+            if (data is JArray array)
+            {
+                foreach (var item in array) yield return item;
+            }
+            else if (data is JObject obj)
+            {
+                // Handle cases where 'data' is an object with numeric keys "0", "1", etc.
+                foreach (var property in obj.Properties())
+                {
+                    yield return property.Value;
+                }
+            }
+        }
+
         public async Task<List<Hub>> GetHubsAsync()
         {
             var hubsList = new List<Hub>();
             dynamic response = await _hubsApi.GetHubsAsync();
-            string json = JsonConvert.SerializeObject(response);
+            JObject json = GetRawJObject(response);
             
-            var hubsResponse = JsonConvert.DeserializeObject<ForgeResponse<HubAttributes>>(json);
-            if (hubsResponse?.data != null)
+            foreach (var item in GetDataItems(json))
             {
-                foreach (var item in hubsResponse.data)
-                {
-                    hubsList.Add(new Hub 
-                    { 
-                        Id = item.id, 
-                        Name = item.attributes?.name ?? "Unknown Hub" 
-                    });
-                }
+                hubsList.Add(new Hub 
+                { 
+                    Id = item["id"]?.ToString(), 
+                    Name = item.SelectToken("attributes.name")?.ToString() ?? "Unknown Hub" 
+                });
             }
             return hubsList;
         }
@@ -49,19 +76,15 @@ namespace ScheduledNwcExporter.Core
         {
             var projectsList = new List<Project>();
             dynamic response = await _projectsApi.GetHubProjectsAsync(hubId);
-            string json = JsonConvert.SerializeObject(response);
+            JObject json = GetRawJObject(response);
 
-            var projectsResponse = JsonConvert.DeserializeObject<ForgeResponse<ProjectAttributes>>(json);
-            if (projectsResponse?.data != null)
+            foreach (var item in GetDataItems(json))
             {
-                foreach (var item in projectsResponse.data)
-                {
-                    projectsList.Add(new Project 
-                    { 
-                        Id = item.id, 
-                        Name = item.attributes?.name ?? "Unknown Project" 
-                    });
-                }
+                projectsList.Add(new Project 
+                { 
+                    Id = item["id"]?.ToString(), 
+                    Name = item.SelectToken("attributes.name")?.ToString() ?? "Unknown Project" 
+                });
             }
             return projectsList;
         }
@@ -70,20 +93,16 @@ namespace ScheduledNwcExporter.Core
         {
             var itemsList = new List<CloudItem>();
             dynamic response = await _projectsApi.GetProjectTopFoldersAsync(hubId, projectId);
-            string json = JsonConvert.SerializeObject(response);
+            JObject json = GetRawJObject(response);
 
-            var foldersResponse = JsonConvert.DeserializeObject<ForgeResponse<FolderAttributes>>(json);
-            if (foldersResponse?.data != null)
+            foreach (var item in GetDataItems(json))
             {
-                foreach (var item in foldersResponse.data)
-                {
-                    itemsList.Add(new CloudItem 
-                    { 
-                        Id = item.id, 
-                        Name = item.attributes?.displayName ?? item.attributes?.name ?? "Unknown Folder", 
-                        Type = CloudItemType.Folder 
-                    });
-                }
+                itemsList.Add(new CloudItem 
+                { 
+                    Id = item["id"]?.ToString(), 
+                    Name = item.SelectToken("attributes.displayName")?.ToString() ?? item.SelectToken("attributes.name")?.ToString() ?? "Unknown Folder", 
+                    Type = CloudItemType.Folder 
+                });
             }
             return itemsList;
         }
@@ -92,84 +111,31 @@ namespace ScheduledNwcExporter.Core
         {
             var itemsList = new List<CloudItem>();
             dynamic response = await _foldersApi.GetFolderContentsAsync(projectId, folderId);
-            string json = JsonConvert.SerializeObject(response);
+            JObject json = GetRawJObject(response);
 
-            var contentsResponse = JsonConvert.DeserializeObject<ForgeResponse<FolderAttributes>>(json);
-            if (contentsResponse?.data != null)
+            foreach (var item in GetDataItems(json))
             {
-                foreach (var item in contentsResponse.data)
+                string type = item["type"]?.ToString();
+                string displayName = item.SelectToken("attributes.displayName")?.ToString() ?? item.SelectToken("attributes.name")?.ToString();
+                
+                if (type == "folders")
                 {
-                    string type = item.type;
-                    string displayName = item.attributes?.displayName ?? item.attributes?.name;
-                    
-                    if (type == "folders")
-                    {
-                        itemsList.Add(new CloudItem { Id = item.id, Name = displayName, Type = CloudItemType.Folder });
-                    }
-                    else if (type == "items" && !string.IsNullOrEmpty(displayName) && displayName.EndsWith(".rvt", StringComparison.OrdinalIgnoreCase))
-                    {
-                        itemsList.Add(new CloudItem 
-                        { 
-                            Id = item.id, 
-                            Name = displayName, 
-                            Type = CloudItemType.File,
-                            VersionId = item.relationships?.tip?.data?.id
-                        });
-                    }
+                    itemsList.Add(new CloudItem { Id = item["id"]?.ToString(), Name = displayName, Type = CloudItemType.Folder });
+                }
+                else if (type == "items" && !string.IsNullOrEmpty(displayName) && displayName.EndsWith(".rvt", StringComparison.OrdinalIgnoreCase))
+                {
+                    itemsList.Add(new CloudItem 
+                    { 
+                        Id = item["id"]?.ToString(), 
+                        Name = displayName, 
+                        Type = CloudItemType.File,
+                        VersionId = item.SelectToken("relationships.tip.data.id")?.ToString()
+                    });
                 }
             }
             return itemsList;
         }
     }
-
-    #region Custom POCOs for JSON:API Deserialization
-
-    public class ForgeResponse<T>
-    {
-        public List<ForgeData<T>> data { get; set; }
-    }
-
-    public class ForgeData<T>
-    {
-        public string id { get; set; }
-        public string type { get; set; }
-        public T attributes { get; set; }
-        public ForgeRelationships relationships { get; set; }
-    }
-
-    public class HubAttributes
-    {
-        public string name { get; set; }
-    }
-
-    public class ProjectAttributes
-    {
-        public string name { get; set; }
-    }
-
-    public class FolderAttributes
-    {
-        public string name { get; set; }
-        public string displayName { get; set; }
-    }
-
-    public class ForgeRelationships
-    {
-        public ForgeRelationshipTip tip { get; set; }
-    }
-
-    public class ForgeRelationshipTip
-    {
-        public ForgeRelationshipData data { get; set; }
-    }
-
-    public class ForgeRelationshipData
-    {
-        public string id { get; set; }
-        public string type { get; set; }
-    }
-
-    #endregion
 
     public class Hub
     {
