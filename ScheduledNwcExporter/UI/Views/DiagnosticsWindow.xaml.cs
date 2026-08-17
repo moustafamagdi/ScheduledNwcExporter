@@ -9,47 +9,48 @@ namespace ScheduledNwcExporter.UI.Views
 {
     public partial class DiagnosticsWindow : Window
     {
-        private readonly ILogger _logger;
+        private readonly DiagnosticsViewModel _viewModel;
 
-        public DiagnosticsWindow(ILogger logger)
+        public DiagnosticsWindow(ILogger logger, AppSettings settings)
         {
             InitializeComponent();
-            _logger = logger;
-            LoadDiagnostics();
-        }
-
-        private void LoadDiagnostics()
-        {
-            var exporterService = new NwcExporterService(_logger);
-            bool exporterAvailable = exporterService.IsExporterAvailable();
-
-            Version? version = Assembly.GetExecutingAssembly().GetName().Version;
-            string versionStr = version != null ? version.ToString() : "1.0.0";
-
-            var sb = new StringBuilder();
-            sb.AppendLine("=== Scheduled Nwc Export Manager Diagnostics ===");
-            sb.AppendLine($"Add-in Version: {versionStr}");
-            sb.AppendLine("Revit Target: Revit 2024 (.NET Framework 4.8)");
-            sb.AppendLine($".NET Version: {Environment.Version}");
-            sb.AppendLine($"OS Version: {Environment.OSVersion}");
-            sb.AppendLine($"Machine Name: {Environment.MachineName}");
-            sb.AppendLine($"Current User: {Environment.UserName}");
-            sb.AppendLine($"Navisworks Exporter Available: {exporterAvailable}");
-            sb.AppendLine($"Log File Path: {_logger.LogFilePath}");
-            sb.AppendLine($"AppData Configuration Path: {System.IO.Path.GetDirectoryName(_logger.LogFilePath)}");
-
-            DiagnosticTextBox.Text = sb.ToString();
+            _viewModel = new DiagnosticsViewModel(logger, settings);
+            DataContext = _viewModel;
         }
 
         private void CopyButton_Click(object sender, RoutedEventArgs e)
         {
-            Clipboard.SetText(DiagnosticTextBox.Text);
-            MessageBox.Show("Diagnostics copied to clipboard.", "Diagnostics", MessageBoxButton.OK, MessageBoxImage.Information);
+            var sb = new StringBuilder();
+            sb.AppendLine("=== Hatco NWC Exporter Diagnostics Report ===");
+            sb.AppendLine($"Generated: {DateTime.Now}");
+            sb.AppendLine("-------------------------------------------");
+            foreach (var test in _viewModel.Tests)
+            {
+                sb.AppendLine($"[{test.StatusIcon}] {test.Title}");
+                sb.AppendLine($"Details: {test.Details}");
+                sb.AppendLine();
+            }
+            
+            Clipboard.SetText(sb.ToString());
+            MessageBox.Show("Diagnostics report copied to clipboard.", "Diagnostics", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
         private void CloseButton_Click(object sender, RoutedEventArgs e)
         {
             Close();
+        }
+    }
+
+    public class InverseBooleanConverter : System.Windows.Data.IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        {
+            return value is bool b && !b;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        {
+            return value is bool b && !b;
         }
     }
 }

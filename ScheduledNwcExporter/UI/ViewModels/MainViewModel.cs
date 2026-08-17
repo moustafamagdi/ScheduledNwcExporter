@@ -470,7 +470,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
 
         private void OpenDiagnostics()
         {
-            new Views.DiagnosticsWindow(_logger).ShowDialog();
+            new Views.DiagnosticsWindow(_logger, _configManager.CurrentSettings).ShowDialog();
         }
 
         private void SaveConfig()
