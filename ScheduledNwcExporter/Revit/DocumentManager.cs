@@ -71,7 +71,10 @@ namespace ScheduledNwcExporter.Revit
             }
             catch (Exception ex)
             {
-                _logger.Error("Revit", $"Failed to open model detached: {ex.Message}", Path.GetFileName(modelPath), "OpeningModel", ex);
+                string safeModelName = modelPath.StartsWith("acc://", StringComparison.OrdinalIgnoreCase) 
+                    ? modelPath.Split('|')[0].Replace("acc://", "") 
+                    : Path.GetFileName(modelPath);
+                _logger.Error("Revit", $"Failed to open model detached: {ex.Message}", safeModelName, "OpeningModel", ex);
                 return null;
             }
         }

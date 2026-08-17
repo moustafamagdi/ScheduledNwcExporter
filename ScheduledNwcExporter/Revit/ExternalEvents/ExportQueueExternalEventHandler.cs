@@ -95,7 +95,7 @@ namespace ScheduledNwcExporter.Revit.ExternalEvents
 
             _logger.Info("Scheduler", $"Export session queued. Total models: {_summary.TotalModels}.");
             
-            string firstModelName = _jobs.Count > 0 ? System.IO.Path.GetFileName(_jobs[0].SourceModelPath) : string.Empty;
+            string firstModelName = _jobs.Count > 0 ? GetSafeModelName(_jobs[0].SourceModelPath) : string.Empty;
             PublishProgress(firstModelName, "Waiting for Revit to become idle to begin processing…");
             
             _externalEvent.Raise();
@@ -124,7 +124,7 @@ namespace ScheduledNwcExporter.Revit.ExternalEvents
             {
                 // Immediately update UI to show we have entered the Revit API context
                 ModelExportJob currentJob = _jobs[_nextJobIndex];
-                string modelName = System.IO.Path.GetFileName(currentJob.SourceModelPath);
+                string modelName = GetSafeModelName(currentJob.SourceModelPath);
                 PublishProgress(modelName, $"Revit context acquired. Starting model {_nextJobIndex + 1} of {_jobs.Count}…");
 
                 if (!_exporterValidated)
@@ -232,6 +232,19 @@ namespace ScheduledNwcExporter.Revit.ExternalEvents
                 $"Export session finished. Successful: {_summary.Successful}; Failed: {_summary.Failed}; Skipped: {_summary.Skipped}; Cancelled: {_summary.Cancelled}; Duration: {_summary.Duration:hh\\:mm\\:ss}.");
 
             SessionCompleted?.Invoke(this, _summary);
+        }
+
+        private string GetSafeModelName(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return "Unknown";
+            if (path.StartsWith("acc://", StringComparison.OrdinalIgnoreCase))
+            {
+                // Format: acc://ModelName.rvt|URN
+                string temp = path.Substring(6);
+                int pipeIndex = temp.IndexOf('|');
+                return pipeIndex > 0 ? temp.Substring(0, pipeIndex) : temp;
+            }
+            return System.IO.Path.GetFileName(path);
         }
     }
 }
