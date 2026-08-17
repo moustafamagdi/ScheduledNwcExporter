@@ -92,7 +92,14 @@
                                 </Style>
                             </DataGridCheckBoxColumn.EditingElementStyle>
                         </DataGridCheckBoxColumn>
-                        <DataGridTextColumn Header="Source Model" Binding="{Binding SourceModelPath}" Width="220" IsReadOnly="True"/>
+                        <DataGridTemplateColumn Header="Source Model" Width="300">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding DisplaySourcePath}" ToolTip="{Binding TechnicalSourcePath}"
+                                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                         <DataGridTextColumn Header="Output Folder" Binding="{Binding OutputDirectory}" Width="140" IsReadOnly="True"/>
                         <DataGridTextColumn Header="Output Filename" Binding="{Binding ResolvedOutputFilename}" Width="150" IsReadOnly="True"/>
                         <DataGridTemplateColumn Header="Status" Width="85">

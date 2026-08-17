@@ -192,6 +192,28 @@ namespace ScheduledNwcExporter.UI.ViewModels
             Parent = parent;
         }
 
+        /// <summary>
+        /// Returns the selected item's human-readable ACC hierarchy for queue display.
+        /// Technical identifiers stay separate and are never exposed in the normal UI.
+        /// </summary>
+        public string GetReadableCloudPath()
+        {
+            var pathParts = new List<string>();
+            CloudNode current = this;
+
+            while (current != null)
+            {
+                if (!string.IsNullOrWhiteSpace(current.Name) &&
+                    !string.Equals(current.Name, "Loading...", StringComparison.OrdinalIgnoreCase))
+                {
+                    pathParts.Insert(0, current.Name);
+                }
+                current = current.Parent;
+            }
+
+            return pathParts.Count > 0 ? "ACC / " + string.Join(" / ", pathParts) : "ACC";
+        }
+
         private async void LoadChildren()
         {
             // If already loaded (beyond the dummy), skip

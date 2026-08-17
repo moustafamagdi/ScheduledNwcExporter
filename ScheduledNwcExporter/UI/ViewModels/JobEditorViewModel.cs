@@ -49,6 +49,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
             {
                 Id = job.Id,
                 SourceModelPath = job.SourceModelPath,
+                CloudDisplayPath = job.CloudDisplayPath,
                 OutputDirectory = job.OutputDirectory,
                 OutputFileNameTemplate = job.OutputFileNameTemplate,
                 IsEnabled = job.IsEnabled,
@@ -117,7 +118,11 @@ namespace ScheduledNwcExporter.UI.ViewModels
                     return;
                 }
 
-                Job.SourceModelPath = $"acc://{modelName}|{node.Region}|{node.RevitProjectGuid}|{node.RevitModelGuid}"; 
+                Job.SourceModelPath = $"acc://{modelName}|{node.Region}|{node.RevitProjectGuid}|{node.RevitModelGuid}";
+                string cloudDisplayPath = node.GetReadableCloudPath();
+                Job.CloudDisplayPath = cloudDisplayPath.EndsWith(".rvt", StringComparison.OrdinalIgnoreCase)
+                    ? cloudDisplayPath
+                    : cloudDisplayPath + ".rvt";
                 OnPropertyChanged(nameof(Job));
                 Validate();
             }
@@ -134,6 +139,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
             if (openFileDialog.ShowDialog() == true)
             {
                 Job.SourceModelPath = openFileDialog.FileName;
+                Job.CloudDisplayPath = string.Empty;
                 if (string.IsNullOrEmpty(Job.OutputDirectory))
                 {
                     Job.OutputDirectory = Path.GetDirectoryName(openFileDialog.FileName) ?? string.Empty;

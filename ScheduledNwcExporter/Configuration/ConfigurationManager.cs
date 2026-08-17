@@ -48,8 +48,54 @@ namespace ScheduledNwcExporter.Configuration
         public string SourceModelPath
         {
             get => _sourceModelPath;
-            set { _sourceModelPath = value; OnPropertyChanged(); }
+            set
+            {
+                _sourceModelPath = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsCloud));
+                OnPropertyChanged(nameof(DisplaySourcePath));
+                OnPropertyChanged(nameof(TechnicalSourcePath));
+                OnPropertyChanged(nameof(ResolvedOutputFilename));
+            }
         }
+
+        // Human-readable hierarchy captured when an ACC model is selected in Cloud Explorer.
+        // The technical acc:// value remains in SourceModelPath for Revit API opening.
+        private string _cloudDisplayPath = string.Empty;
+        public string CloudDisplayPath
+        {
+            get => _cloudDisplayPath;
+            set
+            {
+                _cloudDisplayPath = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(DisplaySourcePath));
+            }
+        }
+
+        [JsonIgnore]
+        public string DisplaySourcePath
+        {
+            get
+            {
+                if (!IsCloud) return SourceModelPath;
+                if (!string.IsNullOrWhiteSpace(CloudDisplayPath)) return CloudDisplayPath;
+
+                // Fallback for legacy settings files that pre-date CloudDisplayPath.
+                string cloudModelName = "Cloud Model.rvt";
+                try
+                {
+                    string[] parts = SourceModelPath.Substring("acc://".Length).Split('|');
+                    if (parts.Length > 0 && !string.IsNullOrWhiteSpace(parts[0])) cloudModelName = parts[0];
+                }
+                catch { }
+
+                return $"ACC / {cloudModelName}";
+            }
+        }
+
+        [JsonIgnore]
+        public string TechnicalSourcePath => SourceModelPath;
 
         private string _outputDirectory = string.Empty;
         public string OutputDirectory
