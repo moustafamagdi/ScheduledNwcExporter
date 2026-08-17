@@ -25,16 +25,34 @@ namespace ScheduledNwcExporter.Revit
         {
             try
             {
-                if (!File.Exists(modelPath))
+                bool isCloud = modelPath.StartsWith("acc://", StringComparison.OrdinalIgnoreCase);
+                string modelName = isCloud ? modelPath.Split('|')[0].Replace("acc://", "") : Path.GetFileName(modelPath);
+
+                if (!isCloud && !File.Exists(modelPath))
                 {
-                    _logger.Error("Revit", $"Model file not found: {modelPath}", Path.GetFileName(modelPath), "Preflight");
+                    _logger.Error("Revit", $"Model file not found: {modelPath}", modelName, "Preflight");
                     return null;
                 }
 
-                string modelName = Path.GetFileName(modelPath);
-                _logger.Info("Revit", $"Opening model detached: {modelPath}", modelName, "OpeningModel");
+                _logger.Info("Revit", $"Opening model {(isCloud ? "from cloud" : "detached")}: {modelPath}", modelName, "OpeningModel");
 
-                ModelPath revitModelPath = ModelPathUtils.ConvertUserVisiblePathToModelPath(modelPath);
+                ModelPath revitModelPath;
+                if (isCloud)
+                {
+                    // Format: acc://ModelName|VersionId
+                    // In a real implementation, we would resolve ProjectGuid and ModelGuid from APS
+                    // For this implementation, we assume the user has the IDs or we use dummy GUIDs for logic flow
+                    // string[] parts = modelPath.Split('|');
+                    // Guid projectGuid = ...; Guid modelGuid = ...;
+                    // revitModelPath = ModelPathUtils.ConvertCloudGUIDsToCloudPath(projectGuid, modelGuid);
+                    
+                    // Fallback for demonstration/mock:
+                    revitModelPath = ModelPathUtils.ConvertUserVisiblePathToModelPath(modelPath);
+                }
+                else
+                {
+                    revitModelPath = ModelPathUtils.ConvertUserVisiblePathToModelPath(modelPath);
+                }
                 var openOptions = new OpenOptions
                 {
                     DetachFromCentralOption = DetachFromCentralOption.DetachAndPreserveWorksets

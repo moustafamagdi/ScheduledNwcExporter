@@ -17,6 +17,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
         }
 
         public ICommand BrowseSourceCommand { get; }
+        public ICommand BrowseCloudCommand { get; }
         public ICommand BrowseOutputCommand { get; }
 
         public JobEditorViewModel(ModelExportJob? job)
@@ -32,8 +33,30 @@ namespace ScheduledNwcExporter.UI.ViewModels
             } : new ModelExportJob();
 
             BrowseSourceCommand = new RelayCommand(_ => BrowseSourceFile());
+            BrowseCloudCommand = new RelayCommand(_ => BrowseCloudFile());
             BrowseOutputCommand = new RelayCommand(_ => BrowseOutputFolder());
             Validate();
+        }
+
+        private void BrowseCloudFile()
+        {
+            string token = Core.CloudAuthenticationService.GetAccessToken();
+            if (string.IsNullOrEmpty(token))
+            {
+                System.Windows.MessageBox.Show("Unable to retrieve Revit session token. Please ensure you are logged into Autodesk in Revit.", "Hatco Cloud Explorer", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                return;
+            }
+
+            var cloudVm = new CloudBrowserViewModel(token, new Logging.FileLogger()); // In real app, pass the logger instance
+            var cloudWindow = new Views.CloudBrowserWindow(cloudVm);
+            if (cloudWindow.ShowDialog() == true && cloudWindow.SelectedNode != null)
+            {
+                // Format: acc://ProjectName|ProjectId/ModelName|VersionId
+                var node = cloudWindow.SelectedNode;
+                Job.SourceModelPath = $"acc://{node.Name}|{node.VersionId}"; 
+                OnPropertyChanged(nameof(Job));
+                Validate();
+            }
         }
 
         private void BrowseSourceFile()
@@ -72,7 +95,15 @@ namespace ScheduledNwcExporter.UI.ViewModels
 
         public bool Validate()
         {
-            if (string.IsNullOrWhiteSpace(Job.SourceModelPath) || !File.Exists(Job.SourceModelPath))
+            if (string.IsNullOrWhiteSpace(Job.SourceModelPath))
+            {
+                ValidationMessage = "✕ Source model path is required.";
+                return false;
+            }
+
+            bool isCloud = Job.SourceModelPath.StartsWith("acc://", StringComparison.OrdinalIgnoreCase);
+
+            if (!isCloud && !File.Exists(Job.SourceModelPath))
             {
                 ValidationMessage = "✕ Source model file not found.";
                 return false;

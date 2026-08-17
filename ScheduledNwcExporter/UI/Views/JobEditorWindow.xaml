@@ -29,9 +29,11 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="80"/>
+                    <ColumnDefinition Width="80"/>
                 </Grid.ColumnDefinitions>
                 <TextBox Grid.Column="0" Text="{Binding Job.SourceModelPath, UpdateSourceTrigger=PropertyChanged}" Height="26" VerticalContentAlignment="Center" Margin="0,0,6,0"/>
-                <Button Grid.Column="1" Content="Browse…" Click="BrowseSource_Click" Height="26"/>
+                <Button Grid.Column="1" Content="Local…" Click="BrowseSource_Click" Height="26" Margin="0,0,4,0"/>
+                <Button Grid.Column="2" Content="Cloud…" Click="BrowseCloud_Click" Height="26"/>
             </Grid>
         </StackPanel>
 

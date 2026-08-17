@@ -36,15 +36,12 @@ namespace ScheduledNwcExporter.UI.Views
 
         private void BrowseSource_Click(object sender, RoutedEventArgs e)
         {
-            var dlg = new Microsoft.Win32.OpenFileDialog
-            {
-                Filter = "Revit Models (*.rvt)|*.rvt|All Files (*.*)|*.*",
-                Title = "Select Revit Source Model"
-            };
-            if (dlg.ShowDialog() == true)
-            {
-                _viewModel.Job.SourceModelPath = dlg.FileName;
-            }
+            _viewModel.BrowseSourceCommand.Execute(null);
+        }
+
+        private void BrowseCloud_Click(object sender, RoutedEventArgs e)
+        {
+            _viewModel.BrowseCloudCommand.Execute(null);
         }
 
         private void BrowseOutput_Click(object sender, RoutedEventArgs e)

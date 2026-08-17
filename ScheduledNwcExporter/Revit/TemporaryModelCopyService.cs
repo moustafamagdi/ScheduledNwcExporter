@@ -62,9 +62,15 @@ namespace ScheduledNwcExporter.Revit
 
         public PreparedModelSource Prepare(string sourceModelPath, bool disableRevitLinks, string modelName)
         {
-            if (!disableRevitLinks)
+            bool isCloud = sourceModelPath.StartsWith("acc://", StringComparison.OrdinalIgnoreCase);
+
+            if (!disableRevitLinks || isCloud)
             {
-                _logger.Info("PerformanceMode", "Performance Mode is disabled. Opening the original source model.", modelName, "Preflight");
+                string message = isCloud 
+                    ? "Performance Mode (Local Copy) is not supported for cloud models. Opening the cloud model directly."
+                    : "Performance Mode is disabled. Opening the original source model.";
+                
+                _logger.Info("PerformanceMode", message, modelName, "Preflight");
                 return new PreparedModelSource(sourceModelPath, sourceModelPath, null, _logger, 0);
             }
 

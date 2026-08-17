@@ -58,7 +58,8 @@ namespace ScheduledNwcExporter.Queue
             if (job == null) throw new ArgumentNullException(nameof(job));
             if (isCancellationRequested == null) throw new ArgumentNullException(nameof(isCancellationRequested));
 
-            string modelName = Path.GetFileName(job.SourceModelPath);
+            bool isCloud = job.SourceModelPath.StartsWith("acc://", StringComparison.OrdinalIgnoreCase);
+            string modelName = isCloud ? job.SourceModelPath.Split('|')[0].Replace("acc://", "") : Path.GetFileName(job.SourceModelPath);
             DateTime startedAt = DateTime.Now;
             var result = new JobExecutionResult { ModelName = modelName };
 
@@ -214,7 +215,8 @@ namespace ScheduledNwcExporter.Queue
                 throw new ArgumentException("The source model must have a .rvt extension.");
             }
 
-            if (!File.Exists(job.SourceModelPath))
+            bool isCloud = job.SourceModelPath.StartsWith("acc://", StringComparison.OrdinalIgnoreCase);
+            if (!isCloud && !File.Exists(job.SourceModelPath))
             {
                 throw new FileNotFoundException("Source model file was not found.", job.SourceModelPath);
             }

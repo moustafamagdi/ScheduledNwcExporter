@@ -1,0 +1,49 @@
+<Window x:Class="ScheduledNwcExporter.UI.Views.CloudBrowserWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:ScheduledNwcExporter.UI.Views"
+        xmlns:vm="clr-namespace:ScheduledNwcExporter.UI.ViewModels"
+        mc:Ignorable="d"
+        Title="Hatco Cloud Explorer (ACC / BIM 360)" Height="600" Width="500"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="Select a Revit model from Autodesk Construction Cloud:" FontWeight="Bold" Margin="0,0,0,10"/>
+
+        <TreeView Grid.Row="1" ItemsSource="{Binding Nodes}" Margin="0,0,0,10">
+            <TreeView.ItemContainerStyle>
+                <Style TargetType="TreeViewItem">
+                    <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+                </Style>
+            </TreeView.ItemContainerStyle>
+            <TreeView.ItemTemplate>
+                <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                    <StackPanel Orientation="Horizontal">
+                        <!-- Simple icon placeholder -->
+                        <TextBlock Text="{Binding Type, Converter={StaticResource TypeToIconConverter}}" Margin="0,0,5,0"/>
+                        <TextBlock Text="{Binding Name}"/>
+                    </StackPanel>
+                </HierarchicalDataTemplate>
+            </TreeView.ItemTemplate>
+        </TreeView>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Select Model" Command="{Binding SelectCommand}" Width="100" Margin="0,0,10,0" IsDefault="True"/>
+            <Button Content="Cancel" Command="{Binding CancelCommand}" Width="100" IsCancel="True"/>
+        </StackPanel>
+
+        <Grid Grid.Row="1" Background="#80FFFFFF" Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                <ProgressBar IsIndeterminate="True" Width="200" Height="20"/>
+                <TextBlock Text="Loading Cloud Data..." HorizontalAlignment="Center" Margin="0,5,0,0"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>
