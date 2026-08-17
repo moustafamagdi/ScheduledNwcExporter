@@ -175,7 +175,7 @@ namespace ScheduledNwcExporter.Revit.ExternalEvents
                 }
 
                 _nextJobIndex++;
-                PublishProgress(modelName, currentJob.LastStatus);
+                PublishProgress(modelName, currentJob.Status.ToString());
 
                 if (_cancelRequested || _nextJobIndex >= _jobs.Count)
                 {

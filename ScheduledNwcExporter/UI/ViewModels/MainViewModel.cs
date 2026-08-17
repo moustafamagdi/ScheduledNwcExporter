@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Input;
@@ -73,19 +74,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
             private set => SetProperty(ref _nextRunText, value);
         }
 
-        private bool _exportLinks;
-        public bool ExportLinks
-        {
-            get => _exportLinks;
-            set
-            {
-                if (SetProperty(ref _exportLinks, value))
-                {
-                    _configManager.CurrentSettings.Export.ExportLinks = value;
-                    _configManager.SaveConfiguration();
-                }
-            }
-        }
+
 
         private bool _useTemporaryCopyWithoutRevitLinks = true;
         public bool UseTemporaryCopyWithoutRevitLinks
@@ -265,6 +254,8 @@ namespace ScheduledNwcExporter.UI.ViewModels
         public ICommand SaveConfigurationCommand { get; }
         public ICommand ExportSettingsCommand { get; }
         public ICommand ImportSettingsCommand { get; }
+        public ICommand AddSlotCommand { get; }
+        public ICommand RemoveSlotCommand { get; }
         // Removed separate job commands in favor of unified settings export/import
 
         public MainViewModel(ConfigurationManager configManager, ILogger logger, ExportQueueExternalEventHandler queueHandler, ScheduleManager? scheduleManager)
@@ -569,23 +560,35 @@ namespace ScheduledNwcExporter.UI.ViewModels
                     AppSettings settings = _configManager.CurrentSettings;
                     IsSchedulerEnabled = settings.Scheduler.IsSchedulerEnabled;
                     ScheduledTimeString = $"{settings.Scheduler.ScheduledHour:D2}:{settings.Scheduler.ScheduledMinute:D2}";
-                    ExportLinks = settings.Export.ExportLinks;
                     UseTemporaryCopyWithoutRevitLinks = settings.Export.UseTemporaryCopyWithoutRevitLinks;
+                    ConvertElementProperties = settings.Export.ConvertElementProperties;
                     DivideFileIntoLevels = settings.Export.DivideFileIntoLevels;
+                    ExportElementIds = settings.Export.ExportElementIds;
                     ExportParts = settings.Export.ExportParts;
-                    FacetingFactor = settings.Export.FacetingFactor;
-                    ParameterExportMode = settings.Export.ParameterExportMode;
-                    ExportUrls = settings.Export.ExportUrls;
-                    ExportRoomAsAttribute = settings.Export.ExportRoomAsAttribute;
+                    ExportInternalCoordinates = settings.Export.ExportInternalCoordinates;
                     ConvertLights = settings.Export.ConvertLights;
+                    ExportRoomAsAttribute = settings.Export.ExportRoomAsAttribute;
+                    ExportRoomGeometry = settings.Export.ExportRoomGeometry;
+                    ExportUrls = settings.Export.ExportUrls;
                     FindMissingMaterials = settings.Export.FindMissingMaterials;
-                    Coordinates = settings.Export.Coordinates;
+                    ExportAllParameters = settings.Export.ExportAllParameters;
+                    ExportElementParameters = settings.Export.ExportElementParameters;
+                    FacetingFactor = settings.Export.FacetingFactor;
                     OverwritePolicy = settings.Export.OverwritePolicy;
 
                     Jobs.Clear();
                     foreach (var job in settings.Jobs)
                     {
                         Jobs.Add(job);
+                    }
+
+                    ScheduleSlots.Clear();
+                    if (settings.Scheduler.Slots != null)
+                    {
+                        foreach (var slot in settings.Scheduler.Slots)
+                        {
+                            ScheduleSlots.Add(slot);
+                        }
                     }
 
                     MessageBox.Show("Configuration imported successfully. UI and queue have been updated.", "Hatco NWC Exporter", MessageBoxButton.OK, MessageBoxImage.Information);
