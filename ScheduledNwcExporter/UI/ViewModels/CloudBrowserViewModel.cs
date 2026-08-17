@@ -51,8 +51,8 @@ namespace ScheduledNwcExporter.UI.ViewModels
 
         public CloudBrowserViewModel(string accessToken, ILogger logger)
         {
-            _apsClient = new APSClient(accessToken);
-            _logger = logger;
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _apsClient = new APSClient(accessToken, _logger);
             Nodes = new ObservableCollection<CloudNode>();
             
             SelectCommand = new RelayCommand(OnSelect, () => SelectedNode != null && SelectedNode.Type == CloudItemType.File);

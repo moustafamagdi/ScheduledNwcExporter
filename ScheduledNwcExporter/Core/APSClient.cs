@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Autodesk.Forge;
 using Newtonsoft.Json.Linq;
+using ScheduledNwcExporter.Logging;
 
 namespace ScheduledNwcExporter.Core
 {
@@ -15,10 +16,19 @@ namespace ScheduledNwcExporter.Core
         private readonly HubsApi _hubsApi;
         private readonly ProjectsApi _projectsApi;
         private readonly FoldersApi _foldersApi;
+        private readonly string _accessToken;
+        private readonly ILogger _logger;
 
-        public APSClient(string accessToken)
+        public APSClient(string accessToken, ILogger logger)
         {
-            Autodesk.Forge.Client.Configuration.Default.AccessToken = accessToken;
+            if (string.IsNullOrWhiteSpace(accessToken))
+            {
+                throw new ArgumentException("An APS access token is required.", nameof(accessToken));
+            }
+
+            _accessToken = accessToken;
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            Autodesk.Forge.Client.Configuration.Default.AccessToken = _accessToken;
             _hubsApi = new HubsApi();
             _projectsApi = new ProjectsApi();
             _foldersApi = new FoldersApi();
