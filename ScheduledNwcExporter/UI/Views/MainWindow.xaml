@@ -153,7 +153,7 @@
                                 <DataGridTextColumn Header="Days" Binding="{Binding DaysDisplay}" Width="*" IsReadOnly="True"/>
                             </DataGrid.Columns>
                         </DataGrid>
-                        <Grid Grid.Row="3" Margin="0,5,0,0" IsEnabled="{Binding HasSelectedSlot}">
+                        <Grid Grid.Row="3" Margin="0,5,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
@@ -162,14 +162,14 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <ComboBox Grid.Column="0" ItemsSource="{Binding ScheduleHours}" SelectedItem="{Binding SelectedSlot.Hour, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="42" Height="21" FontSize="10">
+                            <ComboBox Grid.Column="0" ItemsSource="{Binding ScheduleHours}" SelectedItem="{Binding SelectedSlot.Hour, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="42" Height="21" FontSize="10" IsEnabled="{Binding HasSelectedSlot}">
                                 <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding StringFormat={}{0:D2}}"/></DataTemplate></ComboBox.ItemTemplate>
                             </ComboBox>
                             <TextBlock Grid.Column="1" Text=":" FontWeight="Bold" VerticalAlignment="Center" Margin="3,0"/>
-                            <ComboBox Grid.Column="2" ItemsSource="{Binding ScheduleMinutes}" SelectedItem="{Binding SelectedSlot.Minute, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="42" Height="21" FontSize="10">
+                            <ComboBox Grid.Column="2" ItemsSource="{Binding ScheduleMinutes}" SelectedItem="{Binding SelectedSlot.Minute, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="42" Height="21" FontSize="10" IsEnabled="{Binding HasSelectedSlot}">
                                 <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding StringFormat={}{0:D2}}"/></DataTemplate></ComboBox.ItemTemplate>
                             </ComboBox>
-                            <WrapPanel Grid.Column="3" VerticalAlignment="Center" Margin="8,0,4,0">
+                            <WrapPanel Grid.Column="3" VerticalAlignment="Center" Margin="8,0,4,0" IsEnabled="{Binding HasSelectedSlot}">
                                 <CheckBox Content="M" IsChecked="{Binding IsMonday, Mode=TwoWay}" FontSize="10" Margin="0,0,3,0"/>
                                 <CheckBox Content="T" IsChecked="{Binding IsTuesday, Mode=TwoWay}" FontSize="10" Margin="0,0,3,0"/>
                                 <CheckBox Content="W" IsChecked="{Binding IsWednesday, Mode=TwoWay}" FontSize="10" Margin="0,0,3,0"/>
