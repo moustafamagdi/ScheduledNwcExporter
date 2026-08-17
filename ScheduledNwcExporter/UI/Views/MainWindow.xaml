@@ -5,6 +5,7 @@
         Title="Hatco NWC Exporter" Height="750" Width="950"
         WindowStartupLocation="CenterScreen" Background="#FFF5F5F5">
     <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
         <local:BoolToColorConverter x:Key="BoolToColorConverter" />
         <local:BoolToCloudIconConverter x:Key="BoolToCloudIconConverter" />
         <local:StatusToBackgroundConverter x:Key="StatusToBackgroundConverter" />
@@ -65,6 +66,14 @@
                                 <DataTemplate>
                                     <TextBlock Text="{Binding IsCloud, Converter={StaticResource BoolToCloudIconConverter}}" 
                                                HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="14"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="Cfg" Width="35">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="⚙" Visibility="{Binding HasCustomSettings, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="Gray" ToolTip="Custom Export Overrides Active"/>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>

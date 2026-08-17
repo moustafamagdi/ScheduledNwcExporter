@@ -94,8 +94,23 @@ namespace ScheduledNwcExporter.Queue
 
                 if (attempt > 1)
                 {
-                    _logger.Warning("Job", $"Retrying job (attempt {attempt} of {maximumAttempts}).", modelName, "Retrying");
-                    UpdateProgress(JobStatus.Retrying, $"Retrying ({attempt}/{maximumAttempts})", 0);
+                    int delay = job.RetryDelaySeconds;
+                    _logger.Warning("Job", $"Retrying job (attempt {attempt} of {maximumAttempts}) in {delay}s.", modelName, "Retrying");
+                    UpdateProgress(JobStatus.Retrying, $"Waiting {delay}s to retry...", 0);
+                    
+                    // Wait for the specified delay, checking for cancellation
+                    for (int i = 0; i < delay; i++)
+                    {
+                        if (isCancellationRequested()) break;
+                        System.Threading.Thread.Sleep(1000);
+                    }
+                    
+                    if (isCancellationRequested())
+                    {
+                        result.Cancelled = true;
+                        result.ErrorMessage = "Cancelled during retry delay.";
+                        break;
+                    }
                 }
 
                 Document? document = null;
@@ -140,7 +155,11 @@ namespace ScheduledNwcExporter.Queue
 
                     UpdateProgress(JobStatus.Processing, "Exporting NWC", 70);
                     string outputFileName = ResolveFilenameTemplate(job.OutputFileNameTemplate, modelName);
-                    if (!_nwcExporter.ExportModelToNwc(document, job.OutputDirectory, outputFileName, _settings.Export, exportViewId, modelName))
+                    
+                    // Use custom settings if provided, otherwise use global settings
+                    var exportSettings = job.CustomExportSettings ?? _settings.Export;
+                    
+                    if (!_nwcExporter.ExportModelToNwc(document, job.OutputDirectory, outputFileName, exportSettings, exportViewId, modelName))
                     {
                         throw new InvalidOperationException("The NWC exporter did not create a valid output file.");
                     }

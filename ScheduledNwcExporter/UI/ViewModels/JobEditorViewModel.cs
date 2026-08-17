@@ -22,6 +22,27 @@ namespace ScheduledNwcExporter.UI.ViewModels
         public ICommand BrowseCloudCommand { get; }
         public ICommand BrowseOutputCommand { get; }
 
+        private bool _useCustomSettings;
+        public bool UseCustomSettings
+        {
+            get => _useCustomSettings;
+            set
+            {
+                if (SetProperty(ref _useCustomSettings, value))
+                {
+                    if (value && Job.CustomExportSettings == null)
+                    {
+                        Job.CustomExportSettings = new ExportSettings();
+                    }
+                    else if (!value)
+                    {
+                        Job.CustomExportSettings = null;
+                    }
+                    OnPropertyChanged(nameof(Job));
+                }
+            }
+        }
+
         public JobEditorViewModel(ModelExportJob? job)
         {
             Job = job != null ? new ModelExportJob
@@ -31,8 +52,29 @@ namespace ScheduledNwcExporter.UI.ViewModels
                 OutputDirectory = job.OutputDirectory,
                 OutputFileNameTemplate = job.OutputFileNameTemplate,
                 IsEnabled = job.IsEnabled,
-                RetryCount = job.RetryCount
+                RetryCount = job.RetryCount,
+                RetryDelaySeconds = job.RetryDelaySeconds,
+                CustomExportSettings = job.CustomExportSettings != null ? new ExportSettings
+                {
+                    ExportLinks = job.CustomExportSettings.ExportLinks,
+                    ExportScope = job.CustomExportSettings.ExportScope,
+                    Coordinates = job.CustomExportSettings.Coordinates,
+                    OverwritePolicy = job.CustomExportSettings.OverwritePolicy,
+                    ExportElementIds = job.CustomExportSettings.ExportElementIds,
+                    ExportRoomGeometry = job.CustomExportSettings.ExportRoomGeometry,
+                    UseTemporaryCopyWithoutRevitLinks = job.CustomExportSettings.UseTemporaryCopyWithoutRevitLinks,
+                    DivideFileIntoLevels = job.CustomExportSettings.DivideFileIntoLevels,
+                    ExportParts = job.CustomExportSettings.ExportParts,
+                    FacetingFactor = job.CustomExportSettings.FacetingFactor,
+                    ParameterExportMode = job.CustomExportSettings.ParameterExportMode,
+                    ExportUrls = job.CustomExportSettings.ExportUrls,
+                    ExportRoomAsAttribute = job.CustomExportSettings.ExportRoomAsAttribute,
+                    ConvertLights = job.CustomExportSettings.ConvertLights,
+                    FindMissingMaterials = job.CustomExportSettings.FindMissingMaterials
+                } : null
             } : new ModelExportJob();
+
+            _useCustomSettings = Job.CustomExportSettings != null;
 
             BrowseSourceCommand = new RelayCommand(_ => BrowseSourceFile());
             BrowseCloudCommand = new RelayCommand(_ => BrowseCloudFile());
@@ -133,6 +175,16 @@ namespace ScheduledNwcExporter.UI.ViewModels
             if (string.IsNullOrWhiteSpace(Job.OutputDirectory))
             {
                 ValidationMessage = "✕ Output directory is required.";
+                return false;
+            }
+            if (Job.RetryCount < 0)
+            {
+                ValidationMessage = "✕ Retry count cannot be negative.";
+                return false;
+            }
+            if (Job.RetryDelaySeconds < 0)
+            {
+                ValidationMessage = "✕ Retry delay cannot be negative.";
                 return false;
             }
             ValidationMessage = "✓ Job settings are valid.";

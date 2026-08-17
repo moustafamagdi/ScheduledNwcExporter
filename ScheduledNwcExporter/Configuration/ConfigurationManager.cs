@@ -121,6 +121,23 @@ namespace ScheduledNwcExporter.Configuration
             set { _retryCount = value; OnPropertyChanged(); }
         }
 
+        private int _retryDelaySeconds = 30;
+        public int RetryDelaySeconds
+        {
+            get => _retryDelaySeconds;
+            set { _retryDelaySeconds = value; OnPropertyChanged(); }
+        }
+
+        private ExportSettings? _customExportSettings;
+        public ExportSettings? CustomExportSettings
+        {
+            get => _customExportSettings;
+            set { _customExportSettings = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasCustomSettings)); }
+        }
+
+        [JsonIgnore]
+        public bool HasCustomSettings => _customExportSettings != null;
+
         private JobStatus _status = JobStatus.Ready;
         public JobStatus Status
         {
