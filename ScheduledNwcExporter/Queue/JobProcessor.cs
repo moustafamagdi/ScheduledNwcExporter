@@ -171,7 +171,7 @@ namespace ScheduledNwcExporter.Queue
             return CompleteJob(job, result, startedAt, UpdateStatus);
         }
 
-        private JobExecutionResult CompleteJob(ModelExportJob job, JobExecutionResult result, DateTime startedAt, Action<string> updateStatus)
+        private JobExecutionResult CompleteJob(ModelExportJob job, JobExecutionResult result, DateTime startedAt, Action<string>? updateStatus)
         {
             result.Duration = DateTime.Now - startedAt;
             job.LastRun = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
@@ -179,23 +179,23 @@ namespace ScheduledNwcExporter.Queue
 
             if (result.Succeeded)
             {
-                updateStatus("Success");
+                updateStatus?.Invoke("Success");
                 job.LastError = string.Empty;
                 _logger.Success("Job", $"Job completed in {job.LastDuration}.", result.ModelName, "Completed");
             }
             else if (result.Cancelled)
             {
-                updateStatus("Cancelled");
+                updateStatus?.Invoke("Cancelled");
                 job.LastError = result.ErrorMessage;
                 _logger.Warning("Job", "Job cancelled at a safe boundary.", result.ModelName, "Cancelled");
             }
             else if (result.Skipped)
             {
-                updateStatus("Skipped");
+                updateStatus?.Invoke("Skipped");
             }
             else
             {
-                updateStatus("Failed");
+                updateStatus?.Invoke("Failed");
                 job.LastError = result.ErrorMessage;
                 _logger.Error("Job", $"Job permanently failed. Reason: {result.ErrorMessage}", result.ModelName, "Failed");
             }
@@ -210,7 +210,7 @@ namespace ScheduledNwcExporter.Queue
                 throw new ArgumentException("The source model path is empty.");
             }
 
-            if (!job.SourceModelPath.EndsWith(".rvt", StringComparison.OrdinalIgnoreCase))
+            if (!job.SourceModelPath.ToLower().Contains(".rvt"))
             {
                 throw new ArgumentException("The source model must have a .rvt extension.");
             }
