@@ -301,9 +301,17 @@ namespace ScheduledNwcExporter.UI.ViewModels
         public void Shutdown()
         {
             // AUDIT FIX: Do NOT stop the scheduler on window close. It must persist at App level.
-            _scheduleManager.ScheduledTimeReached -= ScheduleManager_ScheduledTimeReached;
+            if (_scheduleManager != null)
+            {
+                _scheduleManager.ScheduledTimeReached -= ScheduleManager_ScheduledTimeReached;
+            }
             _queueHandler.ProgressChanged -= QueueHandler_ProgressChanged;
             _queueHandler.SessionCompleted -= QueueHandler_SessionCompleted;
+        }
+
+        private void ScheduleManager_ScheduledTimeReached(object sender, EventArgs e)
+        {
+            _uiDispatcher.Invoke(() => StartQueue(Jobs.Where(job => job.IsEnabled), SessionTriggerSource.Scheduler));
         }
 
         private void AddModel()

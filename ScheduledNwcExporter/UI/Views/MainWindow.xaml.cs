@@ -6,6 +6,7 @@ using System.Windows.Media;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using Autodesk.Revit.UI;
+using ScheduledNwcExporter.Application;
 using ScheduledNwcExporter.Configuration;
 using ScheduledNwcExporter.Logging;
 using ScheduledNwcExporter.Revit.ExternalEvents;
