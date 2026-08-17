@@ -182,21 +182,24 @@ namespace ScheduledNwcExporter.UI.Views
         {
             try
             {
-                string status = value as string ?? string.Empty;
-
-                if (status == "Success")
+                if (value is JobStatus status)
                 {
-                    return new SolidColorBrush(Color.FromRgb(144, 238, 144)); // LightGreen
-                }
-
-                if (status != "Ready" && status != "Skipped" && status != "Cancelled" && status != "Failed" && !string.IsNullOrEmpty(status))
-                {
-                    return new SolidColorBrush(Color.FromRgb(152, 251, 152)); // PaleGreen
-                }
-
-                if (status == "Failed")
-                {
-                    return new SolidColorBrush(Color.FromRgb(255, 235, 235)); // Very light red
+                    switch (status)
+                    {
+                        case JobStatus.Success:
+                            return new SolidColorBrush(Color.FromRgb(144, 238, 144)); // LightGreen
+                        case JobStatus.Processing:
+                        case JobStatus.Retrying:
+                            return new SolidColorBrush(Color.FromRgb(152, 251, 152)); // PaleGreen
+                        case JobStatus.Failed:
+                            return new SolidColorBrush(Color.FromRgb(255, 235, 235)); // Very light red
+                        case JobStatus.Cancelled:
+                            return new SolidColorBrush(Color.FromRgb(255, 250, 205)); // LemonChiffon
+                        case JobStatus.Skipped:
+                            return new SolidColorBrush(Color.FromRgb(245, 245, 245)); // WhiteSmoke
+                        default:
+                            return Brushes.Transparent;
+                    }
                 }
             }
             catch { }

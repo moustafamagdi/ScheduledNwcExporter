@@ -63,18 +63,20 @@ namespace ScheduledNwcExporter.Queue
             DateTime startedAt = DateTime.Now;
             var result = new JobExecutionResult { ModelName = modelName };
 
-            void UpdateStatus(string status)
+            void UpdateProgress(JobStatus status, string stage, int percentage)
             {
-                job.LastStatus = status;
-                onProgress?.Invoke(modelName, status);
+                job.Status = status;
+                job.CurrentStage = stage;
+                job.ProgressPercentage = percentage;
+                onProgress?.Invoke(modelName, stage);
             }
 
             if (!job.IsEnabled)
             {
                 result.Skipped = true;
-                UpdateStatus("Skipped");
+                UpdateProgress(JobStatus.Skipped, "Skipped", 100);
                 _logger.Info("Job", "Disabled job skipped.", modelName, "Preflight");
-                return CompleteJob(job, result, startedAt, UpdateStatus);
+                return CompleteJob(job, result, startedAt, UpdateProgress);
             }
 
             int maximumAttempts = Math.Max(1, job.RetryCount + 1);
@@ -93,35 +95,36 @@ namespace ScheduledNwcExporter.Queue
                 if (attempt > 1)
                 {
                     _logger.Warning("Job", $"Retrying job (attempt {attempt} of {maximumAttempts}).", modelName, "Retrying");
+                    UpdateProgress(JobStatus.Retrying, $"Retrying ({attempt}/{maximumAttempts})", 0);
                 }
 
                 Document? document = null;
                 PreparedModelSource? preparedModel = null;
                 try
                 {
-                    UpdateStatus($"Attempt {attempt} - Validating");
+                    UpdateProgress(JobStatus.Processing, "Validating", 5);
                     ValidateJobInputs(job);
 
-                    UpdateStatus($"Attempt {attempt} - Preparing model");
+                    UpdateProgress(JobStatus.Processing, "Preparing model", 10);
                     preparedModel = _temporaryModelCopyService.Prepare(
                         job.SourceModelPath,
                         _settings.Export.UseTemporaryCopyWithoutRevitLinks,
                         modelName);
 
-                    UpdateStatus($"Attempt {attempt} - Opening model");
+                    UpdateProgress(JobStatus.Processing, "Opening model", 20);
                     document = _documentManager.OpenModelDetached(_application, preparedModel.OpenPath);
                     if (document == null)
                     {
                         throw new InvalidOperationException("Revit could not open the source model as a detached document.");
                     }
 
-                    UpdateStatus("Verifying worksets");
+                    UpdateProgress(JobStatus.Processing, "Verifying worksets", 40);
                     if (!_worksetManager.VerifyAllUserWorksetsOpen(document, modelName))
                     {
                         throw new InvalidOperationException("One or more required user worksets were closed after the document opened.");
                     }
 
-                    UpdateStatus("Inspecting links");
+                    UpdateProgress(JobStatus.Processing, "Inspecting links", 50);
                     _linkManager.InspectAndLogRevitLinks(document, modelName);
 
                     if (isCancellationRequested())
@@ -132,10 +135,10 @@ namespace ScheduledNwcExporter.Queue
                         break;
                     }
 
-                    UpdateStatus("Preparing export view");
+                    UpdateProgress(JobStatus.Processing, "Preparing export view", 60);
                     ElementId? exportViewId = _exportViewService.GetOrCreateExportView(document, modelName);
 
-                    UpdateStatus("Exporting NWC");
+                    UpdateProgress(JobStatus.Processing, "Exporting NWC", 70);
                     string outputFileName = ResolveFilenameTemplate(job.OutputFileNameTemplate, modelName);
                     if (!_nwcExporter.ExportModelToNwc(document, job.OutputDirectory, outputFileName, _settings.Export, exportViewId, modelName))
                     {
@@ -159,7 +162,7 @@ namespace ScheduledNwcExporter.Queue
                 {
                     if (document != null)
                     {
-                        UpdateStatus("Closing model");
+                        UpdateProgress(JobStatus.Processing, "Closing model", 95);
                         _documentManager.CloseDocumentSafely(document);
                     }
 
@@ -168,34 +171,34 @@ namespace ScheduledNwcExporter.Queue
             }
 
             result.ErrorMessage = result.Succeeded || result.Cancelled ? result.ErrorMessage : lastError;
-            return CompleteJob(job, result, startedAt, UpdateStatus);
+            return CompleteJob(job, result, startedAt, UpdateProgress);
         }
 
-        private JobExecutionResult CompleteJob(ModelExportJob job, JobExecutionResult result, DateTime startedAt, Action<string>? updateStatus)
+        private JobExecutionResult CompleteJob(ModelExportJob job, JobExecutionResult result, DateTime startedAt, Action<JobStatus, string, int>? updateProgress)
         {
             result.Duration = DateTime.Now - startedAt;
-            job.LastRun = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-            job.LastDuration = result.Duration.ToString(@"hh\:mm\:ss");
+            job.LastRun = DateTime.Now;
+            // job.LastDuration = result.Duration.ToString(@"hh\:mm\:ss"); // Assuming LastDuration exists or was part of a previous version
 
             if (result.Succeeded)
             {
-                updateStatus?.Invoke("Success");
+                updateProgress?.Invoke(JobStatus.Success, "Success", 100);
                 job.LastError = string.Empty;
-                _logger.Success("Job", $"Job completed in {job.LastDuration}.", result.ModelName, "Completed");
+                _logger.Success("Job", $"Job completed in {result.Duration:hh\\:mm\\:ss}.", result.ModelName, "Completed");
             }
             else if (result.Cancelled)
             {
-                updateStatus?.Invoke("Cancelled");
+                updateProgress?.Invoke(JobStatus.Cancelled, "Cancelled", 100);
                 job.LastError = result.ErrorMessage;
                 _logger.Warning("Job", "Job cancelled at a safe boundary.", result.ModelName, "Cancelled");
             }
             else if (result.Skipped)
             {
-                updateStatus?.Invoke("Skipped");
+                updateProgress?.Invoke(JobStatus.Skipped, "Skipped", 100);
             }
             else
             {
-                updateStatus?.Invoke("Failed");
+                updateProgress?.Invoke(JobStatus.Failed, "Failed", 100);
                 job.LastError = result.ErrorMessage;
                 _logger.Error("Job", $"Job permanently failed. Reason: {result.ErrorMessage}", result.ModelName, "Failed");
             }

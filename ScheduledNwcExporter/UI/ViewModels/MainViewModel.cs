@@ -265,11 +265,12 @@ namespace ScheduledNwcExporter.UI.ViewModels
             foreach (var job in settings.Jobs)
             {
                 // Reset status on startup so they appear clean without success colors until run
-                if (string.Equals(job.LastStatus, "Success", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(job.LastStatus, "Failed", StringComparison.OrdinalIgnoreCase))
+                if (job.Status == JobStatus.Success || job.Status == JobStatus.Failed || job.Status == JobStatus.Processing)
                 {
-                    job.LastStatus = "Ready";
+                    job.Status = JobStatus.Ready;
                 }
+                job.ProgressPercentage = 0;
+                job.CurrentStage = string.Empty;
             }
             Jobs = new ObservableCollection<ModelExportJob>(settings.Jobs);
 

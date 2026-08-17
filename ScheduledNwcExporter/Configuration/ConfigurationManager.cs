@@ -8,6 +8,17 @@ using ScheduledNwcExporter.Logging;
 
 namespace ScheduledNwcExporter.Configuration
 {
+    public enum JobStatus
+    {
+        Ready,
+        Processing,
+        Success,
+        Failed,
+        Skipped,
+        Cancelled,
+        Retrying
+    }
+
     public class ModelExportJob : INotifyPropertyChanged
     {
         private string _id = Guid.NewGuid().ToString();
@@ -110,25 +121,37 @@ namespace ScheduledNwcExporter.Configuration
             set { _retryCount = value; OnPropertyChanged(); }
         }
 
-        private string _lastStatus = "Ready";
-        public string LastStatus
+        private JobStatus _status = JobStatus.Ready;
+        public JobStatus Status
         {
-            get => _lastStatus;
-            set { _lastStatus = value; OnPropertyChanged(); }
+            get => _status;
+            set { _status = value; OnPropertyChanged(); OnPropertyChanged(nameof(StatusText)); }
         }
 
-        private string _lastRun = "Never";
-        public string LastRun
+        [JsonIgnore]
+        public string StatusText => Status.ToString();
+
+        private int _progressPercentage;
+        [JsonIgnore]
+        public int ProgressPercentage
+        {
+            get => _progressPercentage;
+            set { _progressPercentage = value; OnPropertyChanged(); }
+        }
+
+        private string _currentStage = string.Empty;
+        [JsonIgnore]
+        public string CurrentStage
+        {
+            get => _currentStage;
+            set { _currentStage = value; OnPropertyChanged(); }
+        }
+
+        private DateTime? _lastRun;
+        public DateTime? LastRun
         {
             get => _lastRun;
             set { _lastRun = value; OnPropertyChanged(); }
-        }
-
-        private string _lastDuration = "-";
-        public string LastDuration
-        {
-            get => _lastDuration;
-            set { _lastDuration = value; OnPropertyChanged(); }
         }
 
         private string _lastError = string.Empty;
@@ -136,6 +159,19 @@ namespace ScheduledNwcExporter.Configuration
         {
             get => _lastError;
             set { _lastError = value; OnPropertyChanged(); }
+        }
+
+        // Compatibility property for older JSON configs
+        [JsonProperty("LastStatus")]
+        private string LastStatusString
+        {
+            set
+            {
+                if (Enum.TryParse(value, true, out JobStatus result))
+                    Status = result;
+                else
+                    Status = JobStatus.Ready;
+            }
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;
