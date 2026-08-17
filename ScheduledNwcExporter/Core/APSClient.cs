@@ -15,7 +15,7 @@ namespace ScheduledNwcExporter.Core
 
         public APSClient(string accessToken)
         {
-            Autodesk.Forge.Configuration.Default.AccessToken = accessToken;
+            Autodesk.Forge.Client.Configuration.Default.AccessToken = accessToken;
             _hubsApi = new HubsApi();
             _projectsApi = new ProjectsApi();
             _foldersApi = new FoldersApi();
