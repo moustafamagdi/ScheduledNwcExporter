@@ -15,7 +15,7 @@ namespace ScheduledNwcExporter.Core
 
         public APSClient(string accessToken)
         {
-            Configuration.Default.AccessToken = accessToken;
+            Autodesk.Forge.Configuration.Default.AccessToken = accessToken;
             _hubsApi = new HubsApi();
             _projectsApi = new ProjectsApi();
             _foldersApi = new FoldersApi();
@@ -26,9 +26,9 @@ namespace ScheduledNwcExporter.Core
         {
             var hubs = new List<Hub>();
             dynamic response = await _hubsApi.GetHubsAsync();
-            foreach (KeyValuePair<string, dynamic> hub in new DynamicDictionaryItems(response.data))
+            foreach (var hub in response.data)
             {
-                hubs.Add(new Hub { Id = hub.Value.id, Name = hub.Value.attributes.name });
+                hubs.Add(new Hub { Id = hub.id, Name = hub.attributes.name });
             }
             return hubs;
         }
@@ -36,10 +36,10 @@ namespace ScheduledNwcExporter.Core
         public async Task<List<Project>> GetProjectsAsync(string hubId)
         {
             var projects = new List<Project>();
-            dynamic response = await _hubsApi.GetHubProjectsAsync(hubId);
-            foreach (KeyValuePair<string, dynamic> project in new DynamicDictionaryItems(response.data))
+            dynamic response = await _projectsApi.GetHubProjectsAsync(hubId);
+            foreach (var project in response.data)
             {
-                projects.Add(new Project { Id = project.Value.id, Name = project.Value.attributes.name });
+                projects.Add(new Project { Id = project.id, Name = project.attributes.name });
             }
             return projects;
         }
@@ -48,12 +48,12 @@ namespace ScheduledNwcExporter.Core
         {
             var items = new List<CloudItem>();
             dynamic response = await _projectsApi.GetProjectTopFoldersAsync(hubId, projectId);
-            foreach (KeyValuePair<string, dynamic> folder in new DynamicDictionaryItems(response.data))
+            foreach (var folder in response.data)
             {
                 items.Add(new CloudItem 
                 { 
-                    Id = folder.Value.id, 
-                    Name = folder.Value.attributes.displayName, 
+                    Id = folder.id, 
+                    Name = folder.attributes.displayName, 
                     Type = CloudItemType.Folder 
                 });
             }
@@ -64,25 +64,23 @@ namespace ScheduledNwcExporter.Core
         {
             var items = new List<CloudItem>();
             dynamic response = await _foldersApi.GetFolderContentsAsync(projectId, folderId);
-            foreach (KeyValuePair<string, dynamic> item in new DynamicDictionaryItems(response.data))
+            foreach (var item in response.data)
             {
-                string type = item.Value.type;
-                string displayName = item.Value.attributes.displayName;
+                string type = item.type;
+                string displayName = item.attributes.displayName;
                 
                 if (type == "folders")
                 {
-                    items.Add(new CloudItem { Id = item.Value.id, Name = displayName, Type = CloudItemType.Folder });
+                    items.Add(new CloudItem { Id = item.id, Name = displayName, Type = CloudItemType.Folder });
                 }
                 else if (type == "items" && displayName.EndsWith(".rvt", StringComparison.OrdinalIgnoreCase))
                 {
-                    // For Revit models, we need the version/lineage to get the ModelGUID
                     items.Add(new CloudItem 
                     { 
-                        Id = item.Value.id, 
+                        Id = item.id, 
                         Name = displayName, 
                         Type = CloudItemType.File,
-                        // The version ID is often needed for specific API calls
-                        VersionId = item.Value.relationships.tip.data.id
+                        VersionId = item.relationships.tip.data.id
                     });
                 }
             }

@@ -10,6 +10,8 @@ using ScheduledNwcExporter.Logging;
 using ScheduledNwcExporter.Revit.ExternalEvents;
 using ScheduledNwcExporter.Scheduler;
 
+using ScheduledNwcExporter.UI;
+
 namespace ScheduledNwcExporter.UI.ViewModels
 {
     /// <summary>

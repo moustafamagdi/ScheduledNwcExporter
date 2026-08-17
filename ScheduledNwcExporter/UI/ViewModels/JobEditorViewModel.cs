@@ -3,6 +3,8 @@ using System.IO;
 using System.Windows.Input;
 using ScheduledNwcExporter.Configuration;
 
+using ScheduledNwcExporter.UI;
+
 namespace ScheduledNwcExporter.UI.ViewModels
 {
     public class JobEditorViewModel : BindableBase

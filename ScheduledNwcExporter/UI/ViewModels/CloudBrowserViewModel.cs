@@ -7,6 +7,8 @@ using System.Windows.Input;
 using ScheduledNwcExporter.Core;
 using ScheduledNwcExporter.Logging;
 
+using ScheduledNwcExporter.UI;
+
 namespace ScheduledNwcExporter.UI.ViewModels
 {
     public class CloudBrowserViewModel : BindableBase

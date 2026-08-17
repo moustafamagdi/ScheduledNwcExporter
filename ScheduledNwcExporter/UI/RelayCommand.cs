@@ -34,5 +34,10 @@ namespace ScheduledNwcExporter.UI
         {
             _execute(parameter);
         }
+
+        public void RaiseCanExecuteChanged()
+        {
+            CommandManager.InvalidateRequerySuggested();
+        }
     }
 }
