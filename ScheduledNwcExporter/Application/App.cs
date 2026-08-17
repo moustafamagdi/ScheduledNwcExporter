@@ -29,7 +29,22 @@ namespace ScheduledNwcExporter.Application
                     // The tab may have been created by another add-in or an earlier load.
                 }
 
-                RibbonPanel panel = application.CreateRibbonPanel(tabName, "Navisworks Export");
+                // Create or find panel safely to avoid conflicts with other Hatco add-ins
+                RibbonPanel panel = null;
+                foreach (var existingPanel in application.GetRibbonPanels(tabName))
+                {
+                    if (existingPanel.Name == "Navisworks Export")
+                    {
+                        panel = existingPanel;
+                        break;
+                    }
+                }
+
+                if (panel == null)
+                {
+                    panel = application.CreateRibbonPanel(tabName, "Navisworks Export");
+                }
+
                 string assemblyPath = Assembly.GetExecutingAssembly().Location;
                 var buttonData = new PushButtonData(
                     "CmdHatcoNwcExport",
@@ -41,7 +56,11 @@ namespace ScheduledNwcExporter.Application
                     LongDescription = "Configure automated batch NWC exports with advanced geometry, parameter, and schedule controls for Revit 2024."
                 };
 
-                panel.AddItem(buttonData);
+                var pushButton = panel.AddItem(buttonData) as PushButton;
+                if (pushButton != null)
+                {
+                    pushButton.AvailabilityClassName = "ScheduledNwcExporter.Application.CommandAvailability";
+                }
                 return Result.Succeeded;
             }
             catch (Exception ex)
