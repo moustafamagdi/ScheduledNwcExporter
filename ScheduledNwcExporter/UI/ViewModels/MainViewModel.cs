@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
 using ScheduledNwcExporter.Configuration;
+using ScheduledNwcExporter.Core;
 using ScheduledNwcExporter.Logging;
 using ScheduledNwcExporter.Revit.ExternalEvents;
 using ScheduledNwcExporter.Scheduler;
@@ -226,6 +228,19 @@ namespace ScheduledNwcExporter.UI.ViewModels
             private set => SetProperty(ref _overallProgressPercentage, value);
         }
 
+        private bool _isRefreshingModelDates;
+        public bool IsRefreshingModelDates
+        {
+            get => _isRefreshingModelDates;
+            private set
+            {
+                if (SetProperty(ref _isRefreshingModelDates, value))
+                {
+                    (RefreshModelDatesCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                }
+            }
+        }
+
         private ModelExportJob? _selectedJob;
         public ModelExportJob? SelectedJob
         {
@@ -311,6 +326,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
         public ICommand ImportSettingsCommand { get; }
         public ICommand AddSlotCommand { get; }
         public ICommand RemoveSlotCommand { get; }
+        public ICommand RefreshModelDatesCommand { get; }
         // Removed separate job commands in favor of unified settings export/import
 
         public MainViewModel(ConfigurationManager configManager, ILogger logger, ExportQueueExternalEventHandler queueHandler, ScheduleManager? scheduleManager)
@@ -386,8 +402,10 @@ namespace ScheduledNwcExporter.UI.ViewModels
             SaveConfigurationCommand = new RelayCommand(SaveConfig);
             ExportSettingsCommand = new RelayCommand(ExportSettingsToFile);
             ImportSettingsCommand = new RelayCommand(ImportSettingsFromFile);
+            RefreshModelDatesCommand = new RelayCommand(RefreshModelDatesAsync, () => !IsRefreshingModelDates && !_queueHandler.IsSessionRunning);
 
             UpdateNextRunText();
+            RefreshModelDatesAsync();
         }
 
         public void Shutdown()
@@ -404,6 +422,81 @@ namespace ScheduledNwcExporter.UI.ViewModels
         private void ScheduleManager_ScheduledTimeReached(object sender, EventArgs e)
         {
             _uiDispatcher.Invoke(() => StartQueue(Jobs.Where(job => job.IsEnabled), SessionTriggerSource.Scheduler));
+        }
+
+        private async void RefreshModelDatesAsync()
+        {
+            if (IsRefreshingModelDates) return;
+
+            IsRefreshingModelDates = true;
+            CurrentActivityStage = "Refreshing model modification dates…";
+            APSClient? apsClient = null;
+
+            try
+            {
+                string accessToken = CloudAuthenticationService.GetAccessToken();
+                foreach (ModelExportJob job in Jobs)
+                {
+                    try
+                    {
+                        if (!job.IsCloud)
+                        {
+                            if (File.Exists(job.SourceModelPath))
+                            {
+                                job.LastSourceModifiedUtc = File.GetLastWriteTimeUtc(job.SourceModelPath);
+                                job.LastMetadataRefreshUtc = DateTime.UtcNow;
+                                job.SourceMetadataError = string.Empty;
+                            }
+                            else
+                            {
+                                job.LastSourceModifiedUtc = null;
+                                job.SourceMetadataError = "Local RVT file was not found.";
+                            }
+                            continue;
+                        }
+
+                        if (string.IsNullOrWhiteSpace(job.CloudDataProjectId) || string.IsNullOrWhiteSpace(job.CloudItemId))
+                        {
+                            job.LastSourceModifiedUtc = null;
+                            job.SourceMetadataError = "This ACC model was added before modification metadata was supported. Edit the job and re-select the model from Cloud Explorer.";
+                            continue;
+                        }
+
+                        if (string.IsNullOrWhiteSpace(accessToken))
+                        {
+                            job.LastSourceModifiedUtc = null;
+                            job.SourceMetadataError = "No Autodesk session is available. Sign in to Autodesk in Revit, then refresh dates.";
+                            continue;
+                        }
+
+                        if (apsClient == null)
+                        {
+                            apsClient = new APSClient(accessToken, _logger);
+                        }
+
+                        var metadata = await apsClient.GetLatestItemMetadataAsync(job.CloudDataProjectId, job.CloudItemId);
+                        job.LastSourceModifiedUtc = metadata.LastModifiedUtc;
+                        job.LastMetadataRefreshUtc = DateTime.UtcNow;
+                        job.CloudVersionId = metadata.VersionId;
+                        job.SourceMetadataError = metadata.LastModifiedUtc.HasValue
+                            ? string.Empty
+                            : "APS did not return a modification date for this ACC item.";
+                    }
+                    catch (Exception ex)
+                    {
+                        job.LastSourceModifiedUtc = null;
+                        job.SourceMetadataError = $"Could not refresh modification date: {ex.Message}";
+                        _logger.Warning("ModelMetadata", job.SourceMetadataError, job.DisplaySourcePath, "RefreshDates", ex);
+                    }
+                }
+
+                SaveJobs();
+                CurrentActivityStage = "Model modification dates refreshed.";
+            }
+            finally
+            {
+                IsRefreshingModelDates = false;
+            }
         }
 
         private void AddModel()

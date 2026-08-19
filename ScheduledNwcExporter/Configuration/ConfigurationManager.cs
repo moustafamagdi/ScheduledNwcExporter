@@ -97,6 +97,109 @@ namespace ScheduledNwcExporter.Configuration
         [JsonIgnore]
         public string TechnicalSourcePath => SourceModelPath;
 
+        // Data Management identifiers retained for a lightweight refresh of ACC item metadata.
+        // They are not used by Revit when opening the cloud model; Revit continues to use SourceModelPath.
+        private string _cloudDataProjectId = string.Empty;
+        public string CloudDataProjectId
+        {
+            get => _cloudDataProjectId;
+            set { _cloudDataProjectId = value; OnPropertyChanged(); }
+        }
+
+        private string _cloudItemId = string.Empty;
+        public string CloudItemId
+        {
+            get => _cloudItemId;
+            set { _cloudItemId = value; OnPropertyChanged(); }
+        }
+
+        private string _cloudVersionId = string.Empty;
+        public string CloudVersionId
+        {
+            get => _cloudVersionId;
+            set { _cloudVersionId = value; OnPropertyChanged(); }
+        }
+
+        private DateTime? _lastSourceModifiedUtc;
+        public DateTime? LastSourceModifiedUtc
+        {
+            get => _lastSourceModifiedUtc;
+            set
+            {
+                _lastSourceModifiedUtc = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(LastSourceModifiedDisplay));
+                OnPropertyChanged(nameof(FreshnessDisplay));
+                OnPropertyChanged(nameof(FreshnessToolTip));
+            }
+        }
+
+        private DateTime? _lastMetadataRefreshUtc;
+        public DateTime? LastMetadataRefreshUtc
+        {
+            get => _lastMetadataRefreshUtc;
+            set { _lastMetadataRefreshUtc = value; OnPropertyChanged(); OnPropertyChanged(nameof(FreshnessToolTip)); }
+        }
+
+        private string _sourceMetadataError = string.Empty;
+        public string SourceMetadataError
+        {
+            get => _sourceMetadataError;
+            set
+            {
+                _sourceMetadataError = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(LastSourceModifiedDisplay));
+                OnPropertyChanged(nameof(FreshnessDisplay));
+                OnPropertyChanged(nameof(FreshnessToolTip));
+            }
+        }
+
+        [JsonIgnore]
+        public string LastSourceModifiedDisplay
+        {
+            get
+            {
+                if (LastSourceModifiedUtc.HasValue)
+                    return LastSourceModifiedUtc.Value.ToLocalTime().ToString("dd MMM yyyy HH:mm");
+                return string.IsNullOrWhiteSpace(SourceMetadataError) ? "Not checked" : "Unavailable";
+            }
+        }
+
+        [JsonIgnore]
+        public string FreshnessDisplay
+        {
+            get
+            {
+                if (!LastSourceModifiedUtc.HasValue)
+                    return string.IsNullOrWhiteSpace(SourceMetadataError) ? "? Refresh dates" : "! Date unavailable";
+
+                DateTime? lastSuccessfulExport = RunHistory?
+                    .Where(run => run.Status == JobStatus.Success)
+                    .OrderByDescending(run => run.Timestamp)
+                    .Select(run => (DateTime?)run.Timestamp)
+                    .FirstOrDefault();
+
+                if (!lastSuccessfulExport.HasValue)
+                    return "● Export needed";
+
+                return LastSourceModifiedUtc.Value > lastSuccessfulExport.Value.ToUniversalTime()
+                    ? "▲ Update NWC"
+                    : "✓ Current";
+            }
+        }
+
+        [JsonIgnore]
+        public string FreshnessToolTip
+        {
+            get
+            {
+                if (!string.IsNullOrWhiteSpace(SourceMetadataError)) return SourceMetadataError;
+                if (!LastSourceModifiedUtc.HasValue) return "Use Refresh Dates to retrieve the model's latest modification time.";
+                return "Compares the source model's latest modification time with the latest successful NWC export.";
+            }
+        }
+
         private string _outputDirectory = string.Empty;
         public string OutputDirectory
         {
@@ -266,6 +369,8 @@ namespace ScheduledNwcExporter.Configuration
                 _runHistory.RemoveAt(_runHistory.Count - 1);
             }
             OnPropertyChanged(nameof(RunHistory));
+            OnPropertyChanged(nameof(FreshnessDisplay));
+            OnPropertyChanged(nameof(FreshnessToolTip));
         }
 
         // Compatibility property for older JSON configs

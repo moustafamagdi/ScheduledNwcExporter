@@ -50,6 +50,12 @@ namespace ScheduledNwcExporter.UI.ViewModels
                 Id = job.Id,
                 SourceModelPath = job.SourceModelPath,
                 CloudDisplayPath = job.CloudDisplayPath,
+                CloudDataProjectId = job.CloudDataProjectId,
+                CloudItemId = job.CloudItemId,
+                CloudVersionId = job.CloudVersionId,
+                LastSourceModifiedUtc = job.LastSourceModifiedUtc,
+                LastMetadataRefreshUtc = job.LastMetadataRefreshUtc,
+                SourceMetadataError = job.SourceMetadataError,
                 OutputDirectory = job.OutputDirectory,
                 OutputFileNameTemplate = job.OutputFileNameTemplate,
                 IsEnabled = job.IsEnabled,
@@ -125,6 +131,12 @@ namespace ScheduledNwcExporter.UI.ViewModels
                     : cloudDisplayPath + ".rvt";
                 Job.CloudOpenAccessDenied = false;
                 Job.CloudOpenAccessDeniedAt = null;
+                Job.CloudDataProjectId = node.ProjectId ?? string.Empty;
+                Job.CloudItemId = node.Id ?? string.Empty;
+                Job.CloudVersionId = node.VersionId ?? string.Empty;
+                Job.LastSourceModifiedUtc = node.LastModifiedUtc;
+                Job.LastMetadataRefreshUtc = node.LastModifiedUtc.HasValue ? DateTime.UtcNow : null;
+                Job.SourceMetadataError = node.LastModifiedUtc.HasValue ? string.Empty : "ACC modification date was not returned for this item. Use Refresh Dates after adding it.";
                 OnPropertyChanged(nameof(Job));
                 Validate();
             }
@@ -144,6 +156,12 @@ namespace ScheduledNwcExporter.UI.ViewModels
                 Job.CloudDisplayPath = string.Empty;
                 Job.CloudOpenAccessDenied = false;
                 Job.CloudOpenAccessDeniedAt = null;
+                Job.CloudDataProjectId = string.Empty;
+                Job.CloudItemId = string.Empty;
+                Job.CloudVersionId = string.Empty;
+                Job.LastSourceModifiedUtc = File.GetLastWriteTimeUtc(openFileDialog.FileName);
+                Job.LastMetadataRefreshUtc = DateTime.UtcNow;
+                Job.SourceMetadataError = string.Empty;
                 if (string.IsNullOrEmpty(Job.OutputDirectory))
                 {
                     Job.OutputDirectory = Path.GetDirectoryName(openFileDialog.FileName) ?? string.Empty;

@@ -153,6 +153,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
         public string HubId { get; set; }
         public string ProjectId { get; set; }
         public string VersionId { get; set; }
+        public DateTime? LastModifiedUtc { get; set; }
         public string Region { get; set; }
         public string RevitProjectGuid { get; set; }
         public string RevitModelGuid { get; set; }
@@ -262,6 +263,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
                         var node = new CloudNode(item.Name, item.Type, item.Id, ProjectId, this) 
                         { 
                             VersionId = item.VersionId,
+                            LastModifiedUtc = item.LastModifiedUtc,
                             Region = Region,
                             // The authoritative GUIDs come from the file's tip Version API response.
                             // Do not overwrite the version-level Project GUID with the parent project node value.

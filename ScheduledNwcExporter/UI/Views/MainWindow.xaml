@@ -53,6 +53,8 @@
                     <Button Content=" + Add Model " Command="{Binding AddModelCommand}" Width="100" Height="28" Margin="0,0,8,0"/>
                     <Button Content=" Edit " Command="{Binding EditModelCommand}" Width="75" Height="28" Margin="0,0,8,0"/>
                     <Button Content=" Remove " Command="{Binding RemoveModelCommand}" Width="75" Height="28" Margin="0,0,8,0"/>
+                    <Button Content=" ↻ Refresh Dates " Command="{Binding RefreshModelDatesCommand}" Width="120" Height="28"
+                            ToolTip="Refresh local file dates and ACC item metadata without opening models."/>
                 </StackPanel>
 
                 <DataGrid x:Name="QueueDataGrid" Grid.Row="1" ItemsSource="{Binding Jobs}" SelectedItem="{Binding SelectedJob}" AutoGenerateColumns="False" CanUserAddRows="False" FontWeight="Normal" Background="White" SelectionMode="Extended">
@@ -92,7 +94,7 @@
                                 </Style>
                             </DataGridCheckBoxColumn.EditingElementStyle>
                         </DataGridCheckBoxColumn>
-                        <DataGridTemplateColumn Header="Source Model" Width="300">
+                        <DataGridTemplateColumn Header="Source Model" Width="220">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding DisplaySourcePath}" ToolTip="{Binding TechnicalSourcePath}"
@@ -100,9 +102,25 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="Output Folder" Binding="{Binding OutputDirectory}" Width="140" IsReadOnly="True"/>
-                        <DataGridTextColumn Header="Output Filename" Binding="{Binding ResolvedOutputFilename}" Width="150" IsReadOnly="True"/>
-                        <DataGridTemplateColumn Header="Status" Width="85">
+                        <DataGridTextColumn Header="Output Folder" Binding="{Binding OutputDirectory}" Width="115" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Output Filename" Binding="{Binding ResolvedOutputFilename}" Width="120" IsReadOnly="True"/>
+                        <DataGridTemplateColumn Header="Model Modified" Width="125">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding LastSourceModifiedDisplay}" ToolTip="{Binding FreshnessToolTip}"
+                                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="NWC State" Width="105">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding FreshnessDisplay}" ToolTip="{Binding FreshnessToolTip}"
+                                               FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="Status" Width="75">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" HorizontalAlignment="Left"
@@ -110,7 +128,7 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Progress" Width="100">
+                        <DataGridTemplateColumn Header="Progress" Width="90">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Grid Margin="4">
@@ -120,7 +138,7 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="Last Run" Binding="{Binding LastRun}" Width="115" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Last Run" Binding="{Binding LastRun}" Width="105" IsReadOnly="True"/>
                     </DataGrid.Columns>
                 </DataGrid>
             </Grid>

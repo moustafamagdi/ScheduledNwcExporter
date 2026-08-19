@@ -33,6 +33,7 @@
       <Private>false</Private>
     </Reference>
     <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Net.Http" />
     <Reference Include="Microsoft.CSharp" />
   </ItemGroup>
 

@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Threading.Tasks;
 using Autodesk.Forge;
 using Newtonsoft.Json.Linq;
@@ -160,10 +163,16 @@ namespace ScheduledNwcExporter.Core
                             
                             string mGuid = vData?.SelectToken("attributes.extension.data.modelGuid")?.ToString();
                             string pGuid = vData?.SelectToken("attributes.extension.data.projectGuid")?.ToString();
+                            string lastModifiedText = vData?.SelectToken("attributes.lastModifiedTime")?.ToString()
+                                ?? vData?.SelectToken("attributes.createTime")?.ToString();
 
                             // Ensure GUIDs are not null before assigning
                             if (!string.IsNullOrEmpty(mGuid)) cloudItem.RevitModelGuid = mGuid;
                             if (!string.IsNullOrEmpty(pGuid)) cloudItem.RevitProjectGuid = pGuid;
+                            if (DateTimeOffset.TryParse(lastModifiedText, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out DateTimeOffset lastModified))
+                            {
+                                cloudItem.LastModifiedUtc = lastModified.UtcDateTime;
+                            }
                             
                             _logger.Info("CloudBrowser", $"Extracted GUIDs for {displayName}: Model={cloudItem.RevitModelGuid}, Project={cloudItem.RevitProjectGuid}");
                         }
@@ -178,6 +187,53 @@ namespace ScheduledNwcExporter.Core
             }
             return itemsList;
         }
+
+        /// <summary>
+        /// Reads the latest item metadata from APS Data Management without opening the model in Revit.
+        /// This endpoint exposes the latest item's lastModifiedTime and its current tip Version identifier.
+        /// </summary>
+        public async Task<CloudItemMetadata> GetLatestItemMetadataAsync(string projectId, string itemId)
+        {
+            if (string.IsNullOrWhiteSpace(projectId)) throw new ArgumentException("An ACC Data Management project ID is required.", nameof(projectId));
+            if (string.IsNullOrWhiteSpace(itemId)) throw new ArgumentException("An ACC item ID is required.", nameof(itemId));
+
+            string encodedProjectId = Uri.EscapeDataString(projectId);
+            string encodedItemId = Uri.EscapeDataString(itemId);
+            string requestUrl = $"https://developer.api.autodesk.com/data/v1/projects/{encodedProjectId}/items/{encodedItemId}";
+
+            using (var client = new HttpClient())
+            using (var request = new HttpRequestMessage(HttpMethod.Get, requestUrl))
+            {
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+                using (HttpResponseMessage response = await client.SendAsync(request).ConfigureAwait(false))
+                {
+                    string content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        throw new InvalidOperationException($"APS item metadata request returned {(int)response.StatusCode} {response.ReasonPhrase}.");
+                    }
+
+                    JObject payload = JObject.Parse(content);
+                    JToken data = payload["data"];
+                    string lastModifiedText = data?.SelectToken("attributes.lastModifiedTime")?.ToString()
+                        ?? data?.SelectToken("attributes.createTime")?.ToString();
+                    string tipVersionId = data?.SelectToken("relationships.tip.data.id")?.ToString() ?? string.Empty;
+
+                    var metadata = new CloudItemMetadata { VersionId = tipVersionId };
+                    if (DateTimeOffset.TryParse(lastModifiedText, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out DateTimeOffset lastModified))
+                    {
+                        metadata.LastModifiedUtc = lastModified.UtcDateTime;
+                    }
+                    return metadata;
+                }
+            }
+        }
+    }
+
+    public sealed class CloudItemMetadata
+    {
+        public DateTime? LastModifiedUtc { get; set; }
+        public string VersionId { get; set; } = string.Empty;
     }
 
     public class Hub
@@ -204,5 +260,6 @@ namespace ScheduledNwcExporter.Core
         public string VersionId { get; set; }
         public string RevitModelGuid { get; set; }
         public string RevitProjectGuid { get; set; }
+        public DateTime? LastModifiedUtc { get; set; }
     }
 }
