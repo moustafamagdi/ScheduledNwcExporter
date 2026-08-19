@@ -131,8 +131,9 @@ namespace ScheduledNwcExporter.Configuration
                 OnPropertyChanged(nameof(LastSourceModifiedDisplay));
                 OnPropertyChanged(nameof(FreshnessDisplay));
                 OnPropertyChanged(nameof(FreshnessToolTip));
-                OnPropertyChanged(nameof(LastSuccessfulExportAgeDisplay));
-                OnPropertyChanged(nameof(LastSuccessfulExportAgeToolTip));
+                OnPropertyChanged(nameof(ExportLag));
+                OnPropertyChanged(nameof(ExportLagDisplay));
+                OnPropertyChanged(nameof(ExportLagToolTip));
             }
         }
 
@@ -154,8 +155,8 @@ namespace ScheduledNwcExporter.Configuration
                 OnPropertyChanged(nameof(LastSourceModifiedDisplay));
                 OnPropertyChanged(nameof(FreshnessDisplay));
                 OnPropertyChanged(nameof(FreshnessToolTip));
-                OnPropertyChanged(nameof(LastSuccessfulExportAgeDisplay));
-                OnPropertyChanged(nameof(LastSuccessfulExportAgeToolTip));
+                OnPropertyChanged(nameof(ExportLagDisplay));
+                OnPropertyChanged(nameof(ExportLagToolTip));
             }
         }
 
@@ -220,39 +221,52 @@ namespace ScheduledNwcExporter.Configuration
         }
 
         [JsonIgnore]
-        public string LastSuccessfulExportAgeDisplay
+        public TimeSpan? ExportLag
         {
             get
             {
-                DateTime? lastSuccessfulExportUtc = LastSuccessfulExportUtc;
-                if (!lastSuccessfulExportUtc.HasValue) return "Not exported";
-
-                TimeSpan age = DateTime.UtcNow - lastSuccessfulExportUtc.Value;
-                if (age < TimeSpan.Zero || age.TotalMinutes < 1) return "Just now";
-                return FormatElapsedDuration(age) + " ago";
+                if (!LastSourceModifiedUtc.HasValue || !LastSuccessfulExportUtc.HasValue) return null;
+                return LastSourceModifiedUtc.Value - LastSuccessfulExportUtc.Value;
             }
         }
 
         [JsonIgnore]
-        public string LastSuccessfulExportAgeToolTip
+        public string ExportLagDisplay
         {
             get
             {
-                DateTime? lastSuccessfulExportUtc = LastSuccessfulExportUtc;
-                if (!lastSuccessfulExportUtc.HasValue) return "There is no successful NWC export recorded for this model.";
-
-                string exportDate = lastSuccessfulExportUtc.Value.ToLocalTime().ToString("dd MMM yyyy HH:mm");
                 if (!LastSourceModifiedUtc.HasValue)
+                    return string.IsNullOrWhiteSpace(SourceMetadataError) ? "? Refresh" : "Unavailable";
+                if (!LastSuccessfulExportUtc.HasValue) return "Not exported";
+
+                TimeSpan lag = ExportLag ?? TimeSpan.Zero;
+                if (lag.TotalMinutes <= 0) return "✓ Current";
+                return "Late " + FormatElapsedDuration(lag);
+            }
+        }
+
+        [JsonIgnore]
+        public string ExportLagToolTip
+        {
+            get
+            {
+                if (!LastSourceModifiedUtc.HasValue)
+                    return string.IsNullOrWhiteSpace(SourceMetadataError)
+                        ? "Refresh model dates to calculate the NWC export delay."
+                        : SourceMetadataError;
+                if (!LastSuccessfulExportUtc.HasValue)
+                    return "The model has no successful NWC export, so it requires a new export.";
+
+                string modelDate = LastSourceModifiedUtc.Value.ToLocalTime().ToString("dd MMM yyyy HH:mm");
+                string exportDate = LastSuccessfulExportUtc.Value.ToLocalTime().ToString("dd MMM yyyy HH:mm");
+                TimeSpan lag = ExportLag ?? TimeSpan.Zero;
+
+                if (lag.TotalMinutes <= 0)
                 {
-                    return $"Last successful NWC export: {exportDate}. Source modification date is not available.";
+                    return $"Model modified: {modelDate}. Latest successful NWC: {exportDate}. The NWC was exported after the latest model change.";
                 }
 
-                TimeSpan difference = lastSuccessfulExportUtc.Value - LastSourceModifiedUtc.Value;
-                string relationship = difference >= TimeSpan.Zero
-                    ? $"NWC was exported {FormatElapsedDuration(difference)} after the latest model change."
-                    : $"The model was changed {FormatElapsedDuration(difference.Duration())} after the latest successful NWC export.";
-
-                return $"Last successful NWC export: {exportDate}. {relationship}";
+                return $"Model modified: {modelDate}. Latest successful NWC: {exportDate}. The NWC is behind the model by {FormatElapsedDuration(lag)}.";
             }
         }
 
@@ -450,8 +464,9 @@ namespace ScheduledNwcExporter.Configuration
             OnPropertyChanged(nameof(FreshnessDisplay));
             OnPropertyChanged(nameof(FreshnessToolTip));
             OnPropertyChanged(nameof(LastSuccessfulExportUtc));
-            OnPropertyChanged(nameof(LastSuccessfulExportAgeDisplay));
-            OnPropertyChanged(nameof(LastSuccessfulExportAgeToolTip));
+            OnPropertyChanged(nameof(ExportLag));
+            OnPropertyChanged(nameof(ExportLagDisplay));
+            OnPropertyChanged(nameof(ExportLagToolTip));
         }
 
         // Compatibility property for older JSON configs

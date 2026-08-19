@@ -112,10 +112,10 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Export Age" Width="90" SortMemberPath="LastSuccessfulExportUtc">
+                        <DataGridTemplateColumn Header="Export Lag" Width="90" SortMemberPath="ExportLag">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding LastSuccessfulExportAgeDisplay}" ToolTip="{Binding LastSuccessfulExportAgeToolTip}"
+                                    <TextBlock Text="{Binding ExportLagDisplay}" ToolTip="{Binding ExportLagToolTip}"
                                                FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
