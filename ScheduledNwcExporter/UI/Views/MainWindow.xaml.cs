@@ -141,6 +141,21 @@ namespace ScheduledNwcExporter.UI.Views
             };
         }
 
+        private void QueueDataGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            try
+            {
+                if (DataContext is MainViewModel viewModel)
+                {
+                    viewModel.UpdateSelectedJobCount(QueueDataGrid.SelectedItems.Count);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.Error("UI", $"Could not update queue selection state: {ex.Message}", string.Empty, "QueueSelection", ex);
+            }
+        }
+
         private void FreshnessHeader_Click(object sender, RoutedEventArgs e)
         {
             try

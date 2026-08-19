@@ -70,7 +70,7 @@
                     </StackPanel>
                 </Grid>
 
-                <DataGrid x:Name="QueueDataGrid" Grid.Row="1" ItemsSource="{Binding JobsView}" SelectedItem="{Binding SelectedJob}" AutoGenerateColumns="False" CanUserAddRows="False" CanUserSortColumns="True" FontWeight="Normal" Background="White" SelectionMode="Extended">
+                <DataGrid x:Name="QueueDataGrid" Grid.Row="1" ItemsSource="{Binding JobsView}" SelectedItem="{Binding SelectedJob}" SelectionChanged="QueueDataGrid_SelectionChanged" AutoGenerateColumns="False" CanUserAddRows="False" CanUserSortColumns="True" FontWeight="Normal" Background="White" SelectionMode="Extended">
                     <DataGrid.RowStyle>
                         <Style TargetType="DataGridRow">
                             <Setter Property="Background" Value="{Binding Status, Converter={StaticResource StatusToBackgroundConverter}}" />

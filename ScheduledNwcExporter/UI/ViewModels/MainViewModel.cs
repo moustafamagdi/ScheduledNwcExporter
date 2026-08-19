@@ -247,7 +247,38 @@ namespace ScheduledNwcExporter.UI.ViewModels
         public ModelExportJob? SelectedJob
         {
             get => _selectedJob;
-            set => SetProperty(ref _selectedJob, value);
+            set
+            {
+                if (SetProperty(ref _selectedJob, value))
+                {
+                    (EditModelCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                }
+            }
+        }
+
+        private int _selectedJobCount;
+        public int SelectedJobCount
+        {
+            get => _selectedJobCount;
+            private set
+            {
+                if (SetProperty(ref _selectedJobCount, Math.Max(0, value)))
+                {
+                    OnPropertyChanged(nameof(HasExactlyOneSelectedJob));
+                    (EditModelCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                }
+            }
+        }
+
+        public bool HasExactlyOneSelectedJob => SelectedJobCount == 1;
+
+        /// <summary>
+        /// Receives the DataGrid's extended-selection count so single-record actions
+        /// cannot silently operate on an arbitrary active row from a multi-selection.
+        /// </summary>
+        public void UpdateSelectedJobCount(int selectedJobCount)
+        {
+            SelectedJobCount = selectedJobCount;
         }
 
         public ObservableCollection<ModelExportJob> Jobs { get; }
@@ -418,7 +449,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
             _queueHandler.SessionCompleted += QueueHandler_SessionCompleted;
 
             AddModelCommand = new RelayCommand(AddModel);
-            EditModelCommand = new RelayCommand(EditModel, () => SelectedJob != null);
+            EditModelCommand = new RelayCommand(EditModel, () => SelectedJob != null && HasExactlyOneSelectedJob);
             RemoveModelCommand = new RelayCommand(RemoveModel, () => SelectedJob != null);
             AddSlotCommand = new RelayCommand(AddSlot);
             RemoveSlotCommand = new RelayCommand(RemoveSlot, () => SelectedSlot != null);
@@ -605,7 +636,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
 
         private void EditModel()
         {
-            if (SelectedJob == null) return;
+            if (SelectedJob == null || !HasExactlyOneSelectedJob) return;
 
             var dialog = new Views.JobEditorWindow(SelectedJob);
             if (dialog.ShowDialog() == true && dialog.Job != null)
