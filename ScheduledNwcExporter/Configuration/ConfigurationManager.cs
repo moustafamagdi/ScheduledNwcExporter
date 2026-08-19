@@ -131,6 +131,8 @@ namespace ScheduledNwcExporter.Configuration
                 OnPropertyChanged(nameof(LastSourceModifiedDisplay));
                 OnPropertyChanged(nameof(FreshnessDisplay));
                 OnPropertyChanged(nameof(FreshnessToolTip));
+                OnPropertyChanged(nameof(LastSuccessfulExportAgeDisplay));
+                OnPropertyChanged(nameof(LastSuccessfulExportAgeToolTip));
             }
         }
 
@@ -152,6 +154,8 @@ namespace ScheduledNwcExporter.Configuration
                 OnPropertyChanged(nameof(LastSourceModifiedDisplay));
                 OnPropertyChanged(nameof(FreshnessDisplay));
                 OnPropertyChanged(nameof(FreshnessToolTip));
+                OnPropertyChanged(nameof(LastSuccessfulExportAgeDisplay));
+                OnPropertyChanged(nameof(LastSuccessfulExportAgeToolTip));
             }
         }
 
@@ -198,6 +202,80 @@ namespace ScheduledNwcExporter.Configuration
                 if (!LastSourceModifiedUtc.HasValue) return "Use Refresh Dates to retrieve the model's latest modification time.";
                 return "Compares the source model's latest modification time with the latest successful NWC export.";
             }
+        }
+
+        [JsonIgnore]
+        public DateTime? LastSuccessfulExportUtc
+        {
+            get
+            {
+                DateTime? lastSuccessfulExport = RunHistory?
+                    .Where(run => run.Status == JobStatus.Success)
+                    .OrderByDescending(run => run.Timestamp)
+                    .Select(run => (DateTime?)run.Timestamp)
+                    .FirstOrDefault();
+
+                return lastSuccessfulExport?.ToUniversalTime();
+            }
+        }
+
+        [JsonIgnore]
+        public string LastSuccessfulExportAgeDisplay
+        {
+            get
+            {
+                DateTime? lastSuccessfulExportUtc = LastSuccessfulExportUtc;
+                if (!lastSuccessfulExportUtc.HasValue) return "Not exported";
+
+                TimeSpan age = DateTime.UtcNow - lastSuccessfulExportUtc.Value;
+                if (age < TimeSpan.Zero || age.TotalMinutes < 1) return "Just now";
+                return FormatElapsedDuration(age) + " ago";
+            }
+        }
+
+        [JsonIgnore]
+        public string LastSuccessfulExportAgeToolTip
+        {
+            get
+            {
+                DateTime? lastSuccessfulExportUtc = LastSuccessfulExportUtc;
+                if (!lastSuccessfulExportUtc.HasValue) return "There is no successful NWC export recorded for this model.";
+
+                string exportDate = lastSuccessfulExportUtc.Value.ToLocalTime().ToString("dd MMM yyyy HH:mm");
+                if (!LastSourceModifiedUtc.HasValue)
+                {
+                    return $"Last successful NWC export: {exportDate}. Source modification date is not available.";
+                }
+
+                TimeSpan difference = lastSuccessfulExportUtc.Value - LastSourceModifiedUtc.Value;
+                string relationship = difference >= TimeSpan.Zero
+                    ? $"NWC was exported {FormatElapsedDuration(difference)} after the latest model change."
+                    : $"The model was changed {FormatElapsedDuration(difference.Duration())} after the latest successful NWC export.";
+
+                return $"Last successful NWC export: {exportDate}. {relationship}";
+            }
+        }
+
+        private static string FormatElapsedDuration(TimeSpan duration)
+        {
+            if (duration.TotalDays >= 60)
+            {
+                int months = Math.Max(1, (int)Math.Floor(duration.TotalDays / 30));
+                return months == 1 ? "1 month" : months + " months";
+            }
+            if (duration.TotalDays >= 1)
+            {
+                int days = (int)Math.Floor(duration.TotalDays);
+                int hours = duration.Hours;
+                return hours > 0 ? $"{days}d {hours}h" : $"{days}d";
+            }
+            if (duration.TotalHours >= 1)
+            {
+                int hours = (int)Math.Floor(duration.TotalHours);
+                int minutes = duration.Minutes;
+                return minutes > 0 ? $"{hours}h {minutes}m" : $"{hours}h";
+            }
+            return Math.Max(1, (int)Math.Floor(duration.TotalMinutes)) + "m";
         }
 
         private string _outputDirectory = string.Empty;
@@ -371,6 +449,9 @@ namespace ScheduledNwcExporter.Configuration
             OnPropertyChanged(nameof(RunHistory));
             OnPropertyChanged(nameof(FreshnessDisplay));
             OnPropertyChanged(nameof(FreshnessToolTip));
+            OnPropertyChanged(nameof(LastSuccessfulExportUtc));
+            OnPropertyChanged(nameof(LastSuccessfulExportAgeDisplay));
+            OnPropertyChanged(nameof(LastSuccessfulExportAgeToolTip));
         }
 
         // Compatibility property for older JSON configs

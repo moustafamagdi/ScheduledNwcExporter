@@ -94,7 +94,7 @@
                                 </Style>
                             </DataGridCheckBoxColumn.EditingElementStyle>
                         </DataGridCheckBoxColumn>
-                        <DataGridTemplateColumn Header="Source Model" Width="220" SortMemberPath="DisplaySourcePath">
+                        <DataGridTemplateColumn Header="Source Model" Width="*" MinWidth="180" SortMemberPath="DisplaySourcePath">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding DisplaySourcePath}" ToolTip="{Binding TechnicalSourcePath}"
@@ -102,9 +102,9 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="Output Folder" Binding="{Binding OutputDirectory}" SortMemberPath="OutputDirectory" Width="115" IsReadOnly="True"/>
-                        <DataGridTextColumn Header="Output Filename" Binding="{Binding ResolvedOutputFilename}" SortMemberPath="ResolvedOutputFilename" Width="120" IsReadOnly="True"/>
-                        <DataGridTemplateColumn Header="Model Modified" Width="125" SortMemberPath="LastSourceModifiedUtc">
+                        <DataGridTextColumn Header="Output Folder" Binding="{Binding OutputDirectory}" SortMemberPath="OutputDirectory" Width="100" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Output Filename" Binding="{Binding ResolvedOutputFilename}" SortMemberPath="ResolvedOutputFilename" Width="105" IsReadOnly="True"/>
+                        <DataGridTemplateColumn Header="Model Modified" Width="115" SortMemberPath="LastSourceModifiedUtc">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding LastSourceModifiedDisplay}" ToolTip="{Binding FreshnessToolTip}"
@@ -112,7 +112,15 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="NWC State" Width="105" SortMemberPath="FreshnessDisplay">
+                        <DataGridTemplateColumn Header="Export Age" Width="90" SortMemberPath="LastSuccessfulExportUtc">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding LastSuccessfulExportAgeDisplay}" ToolTip="{Binding LastSuccessfulExportAgeToolTip}"
+                                               FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="NWC State" Width="95" SortMemberPath="FreshnessDisplay">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding FreshnessDisplay}" ToolTip="{Binding FreshnessToolTip}"
@@ -120,7 +128,7 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Status" Width="75" SortMemberPath="Status">
+                        <DataGridTemplateColumn Header="Status" Width="65" SortMemberPath="Status">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" HorizontalAlignment="Left"
@@ -128,7 +136,7 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Progress" Width="90" SortMemberPath="ProgressPercentage">
+                        <DataGridTemplateColumn Header="Progress" Width="80" SortMemberPath="ProgressPercentage">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Grid Margin="4">
@@ -138,7 +146,7 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="Last Run" Binding="{Binding LastRun}" SortMemberPath="LastRun" Width="105" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Last Run" Binding="{Binding LastRun}" SortMemberPath="LastRun" Width="95" IsReadOnly="True"/>
                     </DataGrid.Columns>
                 </DataGrid>
             </Grid>
