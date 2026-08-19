@@ -26,6 +26,7 @@ namespace ScheduledNwcExporter.UI.Views
         private readonly ExportQueueExternalEventHandler _exportQueueHandler;
         private readonly MainViewModel _viewModel;
         private readonly ILogger _logger;
+        private ListSortDirection? _freshnessSortDirection;
 
         public MainWindow()
         {
@@ -147,10 +148,12 @@ namespace ScheduledNwcExporter.UI.Views
                 if (!(sender is DataGridColumnHeader header) || header.Column == null) return;
                 if (!(QueueDataGrid.ItemsSource is ICollectionView jobsView)) return;
 
-                // First click is intentionally descending: largest overdue duration first.
-                ListSortDirection direction = header.Column.SortDirection == ListSortDirection.Descending
+                // Keep this state ourselves: WPF may reset a template-column header's SortDirection
+                // during collection refreshes, which otherwise makes every click look like the first click.
+                _freshnessSortDirection = _freshnessSortDirection == ListSortDirection.Descending
                     ? ListSortDirection.Ascending
                     : ListSortDirection.Descending;
+                ListSortDirection direction = _freshnessSortDirection.Value;
 
                 using (jobsView.DeferRefresh())
                 {
