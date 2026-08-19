@@ -56,11 +56,25 @@ namespace ScheduledNwcExporter.UI.ViewModels
                 LastSourceModifiedUtc = job.LastSourceModifiedUtc,
                 LastMetadataRefreshUtc = job.LastMetadataRefreshUtc,
                 SourceMetadataError = job.SourceMetadataError,
+                CloudOpenAccessDenied = job.CloudOpenAccessDenied,
+                CloudOpenAccessDeniedAt = job.CloudOpenAccessDeniedAt,
                 OutputDirectory = job.OutputDirectory,
                 OutputFileNameTemplate = job.OutputFileNameTemplate,
                 IsEnabled = job.IsEnabled,
                 RetryCount = job.RetryCount,
                 RetryDelaySeconds = job.RetryDelaySeconds,
+                Status = job.Status,
+                LastRun = job.LastRun,
+                LastError = job.LastError,
+                // The editor works on a separate job instance. Deep-copy history so changing an
+                // output folder cannot erase the original model's export record or share mutations.
+                RunHistory = job.RunHistory?.ConvertAll(run => new RunResult
+                {
+                    Timestamp = run.Timestamp,
+                    Status = run.Status,
+                    Duration = run.Duration,
+                    ErrorMessage = run.ErrorMessage
+                }) ?? new System.Collections.Generic.List<RunResult>(),
                 CustomExportSettings = job.CustomExportSettings != null ? new ExportSettings
                 {
                     ConvertElementProperties = job.CustomExportSettings.ConvertElementProperties,
