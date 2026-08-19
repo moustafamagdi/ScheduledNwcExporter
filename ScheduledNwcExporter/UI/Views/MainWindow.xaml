@@ -49,38 +49,35 @@
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
-                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
-                    <Button Content=" + Add Model " Command="{Binding AddModelCommand}" Width="100" Height="28" Margin="0,0,8,0"/>
-                    <Button Content=" Edit " Command="{Binding EditModelCommand}" Width="75" Height="28" Margin="0,0,8,0"/>
-                    <Button Content=" Remove " Command="{Binding RemoveModelCommand}" Width="75" Height="28" Margin="0,0,8,0"/>
-                    <Button Content=" ↻ Refresh Dates " Command="{Binding RefreshModelDatesCommand}" Width="120" Height="28"
-                            ToolTip="Refresh local file dates and ACC item metadata without opening models."/>
-                </StackPanel>
+                <Grid Grid.Row="0" Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Orientation="Horizontal">
+                        <Button Content=" + Add Model " Command="{Binding AddModelCommand}" Width="100" Height="28" Margin="0,0,8,0"/>
+                        <Button Content=" Edit " Command="{Binding EditModelCommand}" Width="75" Height="28" Margin="0,0,8,0"/>
+                        <Button Content=" Remove " Command="{Binding RemoveModelCommand}" Width="75" Height="28" Margin="0,0,8,0"/>
+                        <Button Content=" ↻ Refresh Dates " Command="{Binding RefreshModelDatesCommand}" Width="120" Height="28" Margin="0,0,8,0"
+                                ToolTip="Refresh local file dates and ACC item metadata without opening models."/>
+                        <Button Content=" ↥ Priority " Command="{Binding ResetQueueOrderCommand}" Width="85" Height="28"
+                                ToolTip="Restore the action-priority order: late, not exported, failed, then current."/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="Show:" VerticalAlignment="Center" Foreground="#FF52616B" Margin="0,0,6,0"/>
+                        <ComboBox ItemsSource="{Binding QueueFilters}" SelectedItem="{Binding SelectedQueueFilter}" Width="115" Height="28"
+                                  ToolTip="Filter the export queue by readiness, result, or model location."/>
+                    </StackPanel>
+                </Grid>
 
-                <DataGrid x:Name="QueueDataGrid" Grid.Row="1" ItemsSource="{Binding Jobs}" SelectedItem="{Binding SelectedJob}" AutoGenerateColumns="False" CanUserAddRows="False" CanUserSortColumns="True" FontWeight="Normal" Background="White" SelectionMode="Extended">
+                <DataGrid x:Name="QueueDataGrid" Grid.Row="1" ItemsSource="{Binding JobsView}" SelectedItem="{Binding SelectedJob}" AutoGenerateColumns="False" CanUserAddRows="False" CanUserSortColumns="True" FontWeight="Normal" Background="White" SelectionMode="Extended">
                     <DataGrid.RowStyle>
                         <Style TargetType="DataGridRow">
                             <Setter Property="Background" Value="{Binding Status, Converter={StaticResource StatusToBackgroundConverter}}" />
                         </Style>
                     </DataGrid.RowStyle>
                     <DataGrid.Columns>
-                        <DataGridTemplateColumn Header="Loc" Width="40" SortMemberPath="IsCloud">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding IsCloud, Converter={StaticResource BoolToCloudIconConverter}}" 
-                                               HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="14"/>
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Cfg" Width="35" SortMemberPath="HasCustomSettings">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="⚙" Visibility="{Binding HasCustomSettings, Converter={StaticResource BooleanToVisibilityConverter}}"
-                                               HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="Gray" ToolTip="Custom Export Overrides Active"/>
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                        <DataGridCheckBoxColumn Header="Enabled" Binding="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}" SortMemberPath="IsEnabled" Width="60">
+                        <DataGridCheckBoxColumn Header="On" Binding="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}" SortMemberPath="IsEnabled" Width="45">
                             <DataGridCheckBoxColumn.ElementStyle>
                                 <Style TargetType="CheckBox">
                                     <Setter Property="HorizontalAlignment" Value="Center"/>
@@ -94,7 +91,15 @@
                                 </Style>
                             </DataGridCheckBoxColumn.EditingElementStyle>
                         </DataGridCheckBoxColumn>
-                        <DataGridTemplateColumn Header="Source Model" Width="*" MinWidth="180" SortMemberPath="DisplaySourcePath">
+                        <DataGridTemplateColumn Header="Type" Width="95" SortMemberPath="IsCloud">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding QueueTypeDisplay}" ToolTip="{Binding QueueTypeToolTip}"
+                                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="Source Model" Width="*" MinWidth="220" SortMemberPath="DisplaySourcePath">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding DisplaySourcePath}" ToolTip="{Binding TechnicalSourcePath}"
@@ -102,51 +107,41 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="Output Folder" Binding="{Binding OutputDirectory}" SortMemberPath="OutputDirectory" Width="100" IsReadOnly="True"/>
-                        <DataGridTextColumn Header="Output Filename" Binding="{Binding ResolvedOutputFilename}" SortMemberPath="ResolvedOutputFilename" Width="105" IsReadOnly="True"/>
-                        <DataGridTemplateColumn Header="Model Modified" Width="115" SortMemberPath="LastSourceModifiedUtc">
+                        <DataGridTemplateColumn Header="Freshness" Width="175" SortMemberPath="QueuePriority">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding LastSourceModifiedDisplay}" ToolTip="{Binding FreshnessToolTip}"
+                                    <TextBlock Text="{Binding QueueFreshnessDisplay}" ToolTip="{Binding QueueFreshnessToolTip}"
+                                               FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="Last Export" Width="100" SortMemberPath="LastSuccessfulExportUtc">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding LastSuccessfulExportDisplay}" ToolTip="{Binding ExportLagToolTip}"
                                                TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Export Lag" Width="90" SortMemberPath="ExportLag">
+                        <DataGridTemplateColumn Header="NWC Output" Width="185" SortMemberPath="FullOutputPath">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding ExportLagDisplay}" ToolTip="{Binding ExportLagToolTip}"
-                                               FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding FullOutputPath}" ToolTip="{Binding FullOutputPath}"
+                                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="NWC State" Width="95" SortMemberPath="FreshnessDisplay">
+                        <DataGridTemplateColumn Header="State / Progress" Width="150" SortMemberPath="Status">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding FreshnessDisplay}" ToolTip="{Binding FreshnessToolTip}"
-                                               FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Status" Width="65" SortMemberPath="Status">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" HorizontalAlignment="Left"
-                                               ToolTip="{Binding RunHistory, Converter={StaticResource RunHistoryConverter}}"/>
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Progress" Width="80" SortMemberPath="ProgressPercentage">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate>
-                                    <Grid Margin="4">
-                                        <ProgressBar Value="{Binding ProgressPercentage}" Minimum="0" Maximum="100" Height="14"/>
-                                        <TextBlock Text="{Binding CurrentStage}" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="Black"/>
+                                    <Grid Margin="4,2">
+                                        <ProgressBar Value="{Binding ProgressPercentage}" Minimum="0" Maximum="100" Height="15"/>
+                                        <TextBlock Text="{Binding QueueStateDisplay}" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                   Foreground="Black" TextTrimming="CharacterEllipsis" ToolTip="{Binding RunHistory, Converter={StaticResource RunHistoryConverter}}"/>
                                     </Grid>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="Last Run" Binding="{Binding LastRun}" SortMemberPath="LastRun" Width="95" IsReadOnly="True"/>
                     </DataGrid.Columns>
                 </DataGrid>
             </Grid>

@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Data;
 using System.Windows.Threading;
 using ScheduledNwcExporter.Configuration;
 using ScheduledNwcExporter.Core;
@@ -249,6 +251,26 @@ namespace ScheduledNwcExporter.UI.ViewModels
         }
 
         public ObservableCollection<ModelExportJob> Jobs { get; }
+        public ICollectionView JobsView { get; }
+
+        public List<string> QueueFilters { get; } = new List<string>
+        {
+            "All Models", "Needs Export", "Current", "Failed", "Cloud", "Local"
+        };
+
+        private string _selectedQueueFilter = "All Models";
+        public string SelectedQueueFilter
+        {
+            get => _selectedQueueFilter;
+            set
+            {
+                if (SetProperty(ref _selectedQueueFilter, value))
+                {
+                    JobsView?.Refresh();
+                }
+            }
+        }
+
         public ObservableCollection<ScheduleSlot> ScheduleSlots { get; } = new ObservableCollection<ScheduleSlot>();
 
         private ScheduleSlot? _selectedSlot;
@@ -327,6 +349,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
         public ICommand AddSlotCommand { get; }
         public ICommand RemoveSlotCommand { get; }
         public ICommand RefreshModelDatesCommand { get; }
+        public ICommand ResetQueueOrderCommand { get; }
         // Removed separate job commands in favor of unified settings export/import
 
         public MainViewModel(ConfigurationManager configManager, ILogger logger, ExportQueueExternalEventHandler queueHandler, ScheduleManager? scheduleManager)
@@ -369,6 +392,14 @@ namespace ScheduledNwcExporter.UI.ViewModels
                 job.CurrentStage = string.Empty;
             }
             Jobs = new ObservableCollection<ModelExportJob>(settings.Jobs);
+            JobsView = CollectionViewSource.GetDefaultView(Jobs);
+            JobsView.Filter = MatchesQueueFilter;
+            ApplyDefaultQueueOrdering();
+            foreach (ModelExportJob job in Jobs)
+            {
+                SubscribeToJobChanges(job);
+            }
+
             if (settings.Scheduler.Slots != null)
             {
                 foreach (var slot in settings.Scheduler.Slots)
@@ -403,6 +434,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
             ExportSettingsCommand = new RelayCommand(ExportSettingsToFile);
             ImportSettingsCommand = new RelayCommand(ImportSettingsFromFile);
             RefreshModelDatesCommand = new RelayCommand(RefreshModelDatesAsync, () => !IsRefreshingModelDates && !_queueHandler.IsSessionRunning);
+            ResetQueueOrderCommand = new RelayCommand(ApplyDefaultQueueOrdering);
 
             UpdateNextRunText();
             RefreshModelDatesAsync();
@@ -417,6 +449,10 @@ namespace ScheduledNwcExporter.UI.ViewModels
             }
             _queueHandler.ProgressChanged -= QueueHandler_ProgressChanged;
             _queueHandler.SessionCompleted -= QueueHandler_SessionCompleted;
+            foreach (ModelExportJob job in Jobs)
+            {
+                UnsubscribeFromJobChanges(job);
+            }
         }
 
         private void ScheduleManager_ScheduledTimeReached(object sender, EventArgs e)
@@ -499,12 +535,68 @@ namespace ScheduledNwcExporter.UI.ViewModels
             }
         }
 
+        private bool MatchesQueueFilter(object item)
+        {
+            if (!(item is ModelExportJob job)) return false;
+
+            switch (SelectedQueueFilter)
+            {
+                case "Needs Export":
+                    return !job.LastSuccessfulExportUtc.HasValue || (job.ExportLag.HasValue && job.ExportLag.Value.TotalMinutes > 0);
+                case "Current":
+                    return job.LastSuccessfulExportUtc.HasValue && job.ExportLag.HasValue && job.ExportLag.Value.TotalMinutes <= 0;
+                case "Failed":
+                    return job.Status == JobStatus.Failed || job.LatestRunStatus == JobStatus.Failed;
+                case "Cloud":
+                    return job.IsCloud;
+                case "Local":
+                    return !job.IsCloud;
+                default:
+                    return true;
+            }
+        }
+
+        private void ApplyDefaultQueueOrdering()
+        {
+            if (JobsView == null) return;
+
+            using (JobsView.DeferRefresh())
+            {
+                JobsView.SortDescriptions.Clear();
+                JobsView.SortDescriptions.Add(new SortDescription(nameof(ModelExportJob.QueuePriority), ListSortDirection.Ascending));
+                JobsView.SortDescriptions.Add(new SortDescription(nameof(ModelExportJob.DisplaySourcePath), ListSortDirection.Ascending));
+            }
+        }
+
+        private void SubscribeToJobChanges(ModelExportJob job)
+        {
+            if (job != null) job.PropertyChanged += Job_PropertyChanged;
+        }
+
+        private void UnsubscribeFromJobChanges(ModelExportJob job)
+        {
+            if (job != null) job.PropertyChanged -= Job_PropertyChanged;
+        }
+
+        private void Job_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(ModelExportJob.Status) ||
+                e.PropertyName == nameof(ModelExportJob.QueuePriority) ||
+                e.PropertyName == nameof(ModelExportJob.ExportLag) ||
+                e.PropertyName == nameof(ModelExportJob.LastSuccessfulExportUtc) ||
+                e.PropertyName == nameof(ModelExportJob.IsCloud))
+            {
+                _uiDispatcher.BeginInvoke(new Action(() => JobsView?.Refresh()));
+            }
+        }
+
         private void AddModel()
         {
             var dialog = new Views.JobEditorWindow(null);
             if (dialog.ShowDialog() == true && dialog.Job != null)
             {
                 Jobs.Add(dialog.Job);
+                SubscribeToJobChanges(dialog.Job);
                 SaveJobs();
                 _logger.Info("UI", $"Added export job: {dialog.Job.SourceModelPath}");
             }
@@ -520,7 +612,9 @@ namespace ScheduledNwcExporter.UI.ViewModels
                 int index = Jobs.IndexOf(SelectedJob);
                 if (index >= 0)
                 {
+                    UnsubscribeFromJobChanges(SelectedJob);
                     Jobs[index] = dialog.Job;
+                    SubscribeToJobChanges(dialog.Job);
                     SaveJobs();
                     _logger.Info("UI", $"Updated export job: {dialog.Job.SourceModelPath}");
                 }
@@ -532,6 +626,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
             if (SelectedJob == null) return;
 
             _logger.Info("UI", $"Removed export job: {SelectedJob.SourceModelPath}");
+            UnsubscribeFromJobChanges(SelectedJob);
             Jobs.Remove(SelectedJob);
             SaveJobs();
         }
@@ -729,11 +824,17 @@ namespace ScheduledNwcExporter.UI.ViewModels
                     FacetingFactor = settings.Export.FacetingFactor;
                     OverwritePolicy = settings.Export.OverwritePolicy;
 
+                    foreach (var existingJob in Jobs)
+                    {
+                        UnsubscribeFromJobChanges(existingJob);
+                    }
                     Jobs.Clear();
                     foreach (var job in settings.Jobs)
                     {
                         Jobs.Add(job);
+                        SubscribeToJobChanges(job);
                     }
+                    JobsView.Refresh();
 
                     foreach (var existingSlot in ScheduleSlots)
                     {

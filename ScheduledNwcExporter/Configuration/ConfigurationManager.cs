@@ -41,7 +41,7 @@ namespace ScheduledNwcExporter.Configuration
         public bool IsEnabled
         {
             get => _isEnabled;
-            set { _isEnabled = value; OnPropertyChanged(); }
+            set { _isEnabled = value; OnPropertyChanged(); OnPropertyChanged(nameof(QueuePriority)); }
         }
 
         private string _sourceModelPath = string.Empty;
@@ -56,6 +56,9 @@ namespace ScheduledNwcExporter.Configuration
                 OnPropertyChanged(nameof(DisplaySourcePath));
                 OnPropertyChanged(nameof(TechnicalSourcePath));
                 OnPropertyChanged(nameof(ResolvedOutputFilename));
+                OnPropertyChanged(nameof(QueueTypeDisplay));
+                OnPropertyChanged(nameof(QueueTypeToolTip));
+                OnPropertyChanged(nameof(FullOutputPath));
             }
         }
 
@@ -70,6 +73,8 @@ namespace ScheduledNwcExporter.Configuration
                 _cloudDisplayPath = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(DisplaySourcePath));
+                OnPropertyChanged(nameof(QueueTypeDisplay));
+                OnPropertyChanged(nameof(QueueTypeToolTip));
             }
         }
 
@@ -96,6 +101,21 @@ namespace ScheduledNwcExporter.Configuration
 
         [JsonIgnore]
         public string TechnicalSourcePath => SourceModelPath;
+
+        [JsonIgnore]
+        public string QueueTypeDisplay
+        {
+            get
+            {
+                string location = IsCloud ? "☁ Cloud" : "▣ Local";
+                return HasCustomSettings ? location + "  ⚙" : location;
+            }
+        }
+
+        [JsonIgnore]
+        public string QueueTypeToolTip => IsCloud
+            ? (HasCustomSettings ? "ACC cloud model with custom export overrides." : "ACC cloud model.")
+            : (HasCustomSettings ? "Local model with custom export overrides." : "Local RVT model.");
 
         // Data Management identifiers retained for a lightweight refresh of ACC item metadata.
         // They are not used by Revit when opening the cloud model; Revit continues to use SourceModelPath.
@@ -131,6 +151,9 @@ namespace ScheduledNwcExporter.Configuration
                 OnPropertyChanged(nameof(LastSourceModifiedDisplay));
                 OnPropertyChanged(nameof(FreshnessDisplay));
                 OnPropertyChanged(nameof(FreshnessToolTip));
+                OnPropertyChanged(nameof(QueueFreshnessDisplay));
+                OnPropertyChanged(nameof(QueueFreshnessToolTip));
+                OnPropertyChanged(nameof(QueuePriority));
                 OnPropertyChanged(nameof(ExportLag));
                 OnPropertyChanged(nameof(ExportLagDisplay));
                 OnPropertyChanged(nameof(ExportLagToolTip));
@@ -155,6 +178,9 @@ namespace ScheduledNwcExporter.Configuration
                 OnPropertyChanged(nameof(LastSourceModifiedDisplay));
                 OnPropertyChanged(nameof(FreshnessDisplay));
                 OnPropertyChanged(nameof(FreshnessToolTip));
+                OnPropertyChanged(nameof(QueueFreshnessDisplay));
+                OnPropertyChanged(nameof(QueueFreshnessToolTip));
+                OnPropertyChanged(nameof(QueuePriority));
                 OnPropertyChanged(nameof(ExportLagDisplay));
                 OnPropertyChanged(nameof(ExportLagToolTip));
             }
@@ -296,18 +322,36 @@ namespace ScheduledNwcExporter.Configuration
         public string OutputDirectory
         {
             get => _outputDirectory;
-            set { _outputDirectory = value; OnPropertyChanged(); }
+            set { _outputDirectory = value; OnPropertyChanged(); OnPropertyChanged(nameof(FullOutputPath)); }
         }
 
         private string _outputFileNameTemplate = "{ModelName}_{Date}_{Time}.nwc";
         public string OutputFileNameTemplate
         {
             get => _outputFileNameTemplate;
-            set { _outputFileNameTemplate = value; OnPropertyChanged(); OnPropertyChanged(nameof(ResolvedOutputFilename)); }
+            set { _outputFileNameTemplate = value; OnPropertyChanged(); OnPropertyChanged(nameof(ResolvedOutputFilename)); OnPropertyChanged(nameof(FullOutputPath)); }
         }
 
         [JsonIgnore]
         public bool IsCloud => _sourceModelPath.StartsWith("acc://", StringComparison.OrdinalIgnoreCase);
+
+        [JsonIgnore]
+        public string FullOutputPath
+        {
+            get
+            {
+                try
+                {
+                    return string.IsNullOrWhiteSpace(OutputDirectory)
+                        ? ResolvedOutputFilename
+                        : Path.Combine(OutputDirectory, ResolvedOutputFilename);
+                }
+                catch
+                {
+                    return ResolvedOutputFilename;
+                }
+            }
+        }
 
         [JsonIgnore]
         public string ResolvedOutputFilename
@@ -399,7 +443,14 @@ namespace ScheduledNwcExporter.Configuration
         public ExportSettings? CustomExportSettings
         {
             get => _customExportSettings;
-            set { _customExportSettings = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasCustomSettings)); }
+            set
+            {
+                _customExportSettings = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(HasCustomSettings));
+                OnPropertyChanged(nameof(QueueTypeDisplay));
+                OnPropertyChanged(nameof(QueueTypeToolTip));
+            }
         }
 
         [JsonIgnore]
@@ -409,7 +460,14 @@ namespace ScheduledNwcExporter.Configuration
         public JobStatus Status
         {
             get => _status;
-            set { _status = value; OnPropertyChanged(); OnPropertyChanged(nameof(StatusText)); }
+            set
+            {
+                _status = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(StatusText));
+                OnPropertyChanged(nameof(QueueStateDisplay));
+                OnPropertyChanged(nameof(QueuePriority));
+            }
         }
 
         [JsonIgnore]
@@ -420,7 +478,7 @@ namespace ScheduledNwcExporter.Configuration
         public int ProgressPercentage
         {
             get => _progressPercentage;
-            set { _progressPercentage = value; OnPropertyChanged(); }
+            set { _progressPercentage = value; OnPropertyChanged(); OnPropertyChanged(nameof(QueueStateDisplay)); }
         }
 
         private string _currentStage = string.Empty;
@@ -428,7 +486,37 @@ namespace ScheduledNwcExporter.Configuration
         public string CurrentStage
         {
             get => _currentStage;
-            set { _currentStage = value; OnPropertyChanged(); }
+            set { _currentStage = value; OnPropertyChanged(); OnPropertyChanged(nameof(QueueStateDisplay)); }
+        }
+
+        [JsonIgnore]
+        public string QueueStateDisplay
+        {
+            get
+            {
+                if ((Status == JobStatus.Processing || Status == JobStatus.Retrying) && !string.IsNullOrWhiteSpace(CurrentStage))
+                    return CurrentStage;
+                return StatusText;
+            }
+        }
+
+        [JsonIgnore]
+        public JobStatus? LatestRunStatus => RunHistory?
+            .OrderByDescending(run => run.Timestamp)
+            .Select(run => (JobStatus?)run.Status)
+            .FirstOrDefault();
+
+        [JsonIgnore]
+        public int QueuePriority
+        {
+            get
+            {
+                if (!IsEnabled) return 90;
+                if (ExportLag.HasValue && ExportLag.Value.TotalMinutes > 0) return 0;
+                if (!LastSuccessfulExportUtc.HasValue) return 1;
+                if (LatestRunStatus == JobStatus.Failed || Status == JobStatus.Failed) return 2;
+                return 3;
+            }
         }
 
         private DateTime? _lastRun;
@@ -449,7 +537,17 @@ namespace ScheduledNwcExporter.Configuration
         public List<RunResult> RunHistory
         {
             get => _runHistory;
-            set { _runHistory = value; OnPropertyChanged(); }
+            set
+            {
+                _runHistory = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(LatestRunStatus));
+                OnPropertyChanged(nameof(LastSuccessfulExportUtc));
+                OnPropertyChanged(nameof(LastSuccessfulExportDisplay));
+                OnPropertyChanged(nameof(QueueFreshnessDisplay));
+                OnPropertyChanged(nameof(QueueFreshnessToolTip));
+                OnPropertyChanged(nameof(QueuePriority));
+            }
         }
 
         public void AddRunResult(RunResult result)
@@ -463,11 +561,41 @@ namespace ScheduledNwcExporter.Configuration
             OnPropertyChanged(nameof(RunHistory));
             OnPropertyChanged(nameof(FreshnessDisplay));
             OnPropertyChanged(nameof(FreshnessToolTip));
+            OnPropertyChanged(nameof(QueueFreshnessDisplay));
+            OnPropertyChanged(nameof(QueueFreshnessToolTip));
+            OnPropertyChanged(nameof(QueuePriority));
             OnPropertyChanged(nameof(LastSuccessfulExportUtc));
+            OnPropertyChanged(nameof(LastSuccessfulExportDisplay));
+            OnPropertyChanged(nameof(LatestRunStatus));
             OnPropertyChanged(nameof(ExportLag));
             OnPropertyChanged(nameof(ExportLagDisplay));
             OnPropertyChanged(nameof(ExportLagToolTip));
         }
+
+        [JsonIgnore]
+        public string QueueFreshnessDisplay
+        {
+            get
+            {
+                if (!LastSourceModifiedUtc.HasValue)
+                    return string.IsNullOrWhiteSpace(SourceMetadataError) ? "? Refresh dates" : "! Date unavailable";
+                if (!LastSuccessfulExportUtc.HasValue) return "● Not exported";
+
+                string modified = LastSourceModifiedUtc.Value.ToLocalTime().ToString("dd MMM");
+                TimeSpan lag = ExportLag ?? TimeSpan.Zero;
+                return lag.TotalMinutes > 0
+                    ? $"▲ Late {FormatElapsedDuration(lag)} · {modified}"
+                    : $"✓ Current · {modified}";
+            }
+        }
+
+        [JsonIgnore]
+        public string QueueFreshnessToolTip => ExportLagToolTip;
+
+        [JsonIgnore]
+        public string LastSuccessfulExportDisplay => LastSuccessfulExportUtc.HasValue
+            ? LastSuccessfulExportUtc.Value.ToLocalTime().ToString("dd MMM HH:mm")
+            : "Not exported";
 
         // Compatibility property for older JSON configs
         [JsonProperty("LastStatus")]
