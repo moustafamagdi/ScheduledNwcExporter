@@ -564,6 +564,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
             {
                 JobsView.SortDescriptions.Clear();
                 JobsView.SortDescriptions.Add(new SortDescription(nameof(ModelExportJob.QueuePriority), ListSortDirection.Ascending));
+                JobsView.SortDescriptions.Add(new SortDescription(nameof(ModelExportJob.FreshnessSortKey), ListSortDirection.Descending));
                 JobsView.SortDescriptions.Add(new SortDescription(nameof(ModelExportJob.DisplaySourcePath), ListSortDirection.Ascending));
             }
         }

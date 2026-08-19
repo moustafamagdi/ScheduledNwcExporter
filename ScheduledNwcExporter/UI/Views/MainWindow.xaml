@@ -107,7 +107,12 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Freshness" Width="175" SortMemberPath="QueuePriority">
+                        <DataGridTemplateColumn Header="Freshness" Width="175" SortMemberPath="FreshnessSortKey">
+                            <DataGridTemplateColumn.HeaderStyle>
+                                <Style TargetType="DataGridColumnHeader">
+                                    <EventSetter Event="Click" Handler="FreshnessHeader_Click"/>
+                                </Style>
+                            </DataGridTemplateColumn.HeaderStyle>
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding QueueFreshnessDisplay}" ToolTip="{Binding QueueFreshnessToolTip}"

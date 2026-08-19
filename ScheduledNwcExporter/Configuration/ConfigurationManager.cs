@@ -153,6 +153,7 @@ namespace ScheduledNwcExporter.Configuration
                 OnPropertyChanged(nameof(FreshnessToolTip));
                 OnPropertyChanged(nameof(QueueFreshnessDisplay));
                 OnPropertyChanged(nameof(QueueFreshnessToolTip));
+                OnPropertyChanged(nameof(FreshnessSortKey));
                 OnPropertyChanged(nameof(QueuePriority));
                 OnPropertyChanged(nameof(ExportLag));
                 OnPropertyChanged(nameof(ExportLagDisplay));
@@ -180,6 +181,7 @@ namespace ScheduledNwcExporter.Configuration
                 OnPropertyChanged(nameof(FreshnessToolTip));
                 OnPropertyChanged(nameof(QueueFreshnessDisplay));
                 OnPropertyChanged(nameof(QueueFreshnessToolTip));
+                OnPropertyChanged(nameof(FreshnessSortKey));
                 OnPropertyChanged(nameof(QueuePriority));
                 OnPropertyChanged(nameof(ExportLagDisplay));
                 OnPropertyChanged(nameof(ExportLagToolTip));
@@ -546,6 +548,7 @@ namespace ScheduledNwcExporter.Configuration
                 OnPropertyChanged(nameof(LastSuccessfulExportDisplay));
                 OnPropertyChanged(nameof(QueueFreshnessDisplay));
                 OnPropertyChanged(nameof(QueueFreshnessToolTip));
+                OnPropertyChanged(nameof(FreshnessSortKey));
                 OnPropertyChanged(nameof(QueuePriority));
             }
         }
@@ -563,6 +566,7 @@ namespace ScheduledNwcExporter.Configuration
             OnPropertyChanged(nameof(FreshnessToolTip));
             OnPropertyChanged(nameof(QueueFreshnessDisplay));
             OnPropertyChanged(nameof(QueueFreshnessToolTip));
+            OnPropertyChanged(nameof(FreshnessSortKey));
             OnPropertyChanged(nameof(QueuePriority));
             OnPropertyChanged(nameof(LastSuccessfulExportUtc));
             OnPropertyChanged(nameof(LastSuccessfulExportDisplay));
@@ -570,6 +574,20 @@ namespace ScheduledNwcExporter.Configuration
             OnPropertyChanged(nameof(ExportLag));
             OnPropertyChanged(nameof(ExportLagDisplay));
             OnPropertyChanged(nameof(ExportLagToolTip));
+        }
+
+        [JsonIgnore]
+        public double FreshnessSortKey
+        {
+            get
+            {
+                // Unexported models rank before any dated model; otherwise compare actual overdue seconds.
+                if (!LastSuccessfulExportUtc.HasValue) return double.MaxValue;
+                if (!LastSourceModifiedUtc.HasValue) return double.MinValue;
+
+                TimeSpan lag = ExportLag ?? TimeSpan.Zero;
+                return lag.TotalSeconds > 0 ? lag.TotalSeconds : double.MinValue;
+            }
         }
 
         [JsonIgnore]

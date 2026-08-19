@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Text;
 using System.Windows;
@@ -137,6 +138,38 @@ namespace ScheduledNwcExporter.UI.Views
                     _logger?.Error("UI", $"Error in key down handler: {ex.Message}", string.Empty, "Interaction");
                 }
             };
+        }
+
+        private void FreshnessHeader_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (!(sender is DataGridColumnHeader header) || header.Column == null) return;
+                if (!(QueueDataGrid.ItemsSource is ICollectionView jobsView)) return;
+
+                // First click is intentionally descending: largest overdue duration first.
+                ListSortDirection direction = header.Column.SortDirection == ListSortDirection.Descending
+                    ? ListSortDirection.Ascending
+                    : ListSortDirection.Descending;
+
+                using (jobsView.DeferRefresh())
+                {
+                    jobsView.SortDescriptions.Clear();
+                    jobsView.SortDescriptions.Add(new SortDescription(nameof(ModelExportJob.FreshnessSortKey), direction));
+                    jobsView.SortDescriptions.Add(new SortDescription(nameof(ModelExportJob.DisplaySourcePath), ListSortDirection.Ascending));
+                }
+
+                foreach (DataGridColumn column in QueueDataGrid.Columns)
+                {
+                    column.SortDirection = ReferenceEquals(column, header.Column) ? direction : null;
+                }
+
+                e.Handled = true;
+            }
+            catch (Exception ex)
+            {
+                _logger?.Error("UI", $"Could not sort the Freshness column: {ex.Message}", string.Empty, "FreshnessSort", ex);
+            }
         }
 
         private void MainWindow_Closed(object? sender, EventArgs e)
