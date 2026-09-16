@@ -13,8 +13,8 @@ using ScheduledNwcExporter.Configuration;
 using ScheduledNwcExporter.Core;
 using ScheduledNwcExporter.Logging;
 using ScheduledNwcExporter.Revit.ExternalEvents;
+using ScheduledNwcExporter.Reliability;
 using ScheduledNwcExporter.Scheduler;
-
 using ScheduledNwcExporter.UI;
 
 namespace ScheduledNwcExporter.UI.ViewModels
@@ -43,14 +43,8 @@ namespace ScheduledNwcExporter.UI.ViewModels
                     _configManager.SaveConfiguration();
                     UpdateNextRunText();
 
-                    if (value)
-                    {
-                        _scheduleManager.Start();
-                    }
-                    else
-                    {
-                        _scheduleManager.Stop();
-                    }
+                    if (value) _scheduleManager.Start();
+                    else _scheduleManager.Stop();
                 }
             }
         }
@@ -78,8 +72,6 @@ namespace ScheduledNwcExporter.UI.ViewModels
             private set => SetProperty(ref _nextRunText, value);
         }
 
-
-
         private bool _useTemporaryCopyWithoutRevitLinks = true;
         public bool UseTemporaryCopyWithoutRevitLinks
         {
@@ -90,6 +82,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
                 {
                     _configManager.CurrentSettings.Export.UseTemporaryCopyWithoutRevitLinks = value;
                     _configManager.SaveConfiguration();
+                    SelectNeedsExportModels();
                 }
             }
         }
@@ -98,91 +91,91 @@ namespace ScheduledNwcExporter.UI.ViewModels
         public bool ConvertElementProperties
         {
             get => _convertElementProperties;
-            set { if (SetProperty(ref _convertElementProperties, value)) { _configManager.CurrentSettings.Export.ConvertElementProperties = value; _configManager.SaveConfiguration(); } }
+            set { if (SetProperty(ref _convertElementProperties, value)) { _configManager.CurrentSettings.Export.ConvertElementProperties = value; _configManager.SaveConfiguration(); SelectNeedsExportModels(); } }
         }
 
         private bool _divideFileIntoLevels;
         public bool DivideFileIntoLevels
         {
             get => _divideFileIntoLevels;
-            set { if (SetProperty(ref _divideFileIntoLevels, value)) { _configManager.CurrentSettings.Export.DivideFileIntoLevels = value; _configManager.SaveConfiguration(); } }
+            set { if (SetProperty(ref _divideFileIntoLevels, value)) { _configManager.CurrentSettings.Export.DivideFileIntoLevels = value; _configManager.SaveConfiguration(); SelectNeedsExportModels(); } }
         }
 
         private bool _exportElementIds;
         public bool ExportElementIds
         {
             get => _exportElementIds;
-            set { if (SetProperty(ref _exportElementIds, value)) { _configManager.CurrentSettings.Export.ExportElementIds = value; _configManager.SaveConfiguration(); } }
+            set { if (SetProperty(ref _exportElementIds, value)) { _configManager.CurrentSettings.Export.ExportElementIds = value; _configManager.SaveConfiguration(); SelectNeedsExportModels(); } }
         }
 
         private bool _exportParts;
         public bool ExportParts
         {
             get => _exportParts;
-            set { if (SetProperty(ref _exportParts, value)) { _configManager.CurrentSettings.Export.ExportParts = value; _configManager.SaveConfiguration(); } }
+            set { if (SetProperty(ref _exportParts, value)) { _configManager.CurrentSettings.Export.ExportParts = value; _configManager.SaveConfiguration(); SelectNeedsExportModels(); } }
         }
 
         private bool _exportInternalCoordinates;
         public bool ExportInternalCoordinates
         {
             get => _exportInternalCoordinates;
-            set { if (SetProperty(ref _exportInternalCoordinates, value)) { _configManager.CurrentSettings.Export.ExportInternalCoordinates = value; _configManager.SaveConfiguration(); } }
+            set { if (SetProperty(ref _exportInternalCoordinates, value)) { _configManager.CurrentSettings.Export.ExportInternalCoordinates = value; _configManager.SaveConfiguration(); SelectNeedsExportModels(); } }
         }
 
         private bool _convertLights;
         public bool ConvertLights
         {
             get => _convertLights;
-            set { if (SetProperty(ref _convertLights, value)) { _configManager.CurrentSettings.Export.ConvertLights = value; _configManager.SaveConfiguration(); } }
+            set { if (SetProperty(ref _convertLights, value)) { _configManager.CurrentSettings.Export.ConvertLights = value; _configManager.SaveConfiguration(); SelectNeedsExportModels(); } }
         }
 
         private bool _exportRoomAsAttribute;
         public bool ExportRoomAsAttribute
         {
             get => _exportRoomAsAttribute;
-            set { if (SetProperty(ref _exportRoomAsAttribute, value)) { _configManager.CurrentSettings.Export.ExportRoomAsAttribute = value; _configManager.SaveConfiguration(); } }
+            set { if (SetProperty(ref _exportRoomAsAttribute, value)) { _configManager.CurrentSettings.Export.ExportRoomAsAttribute = value; _configManager.SaveConfiguration(); SelectNeedsExportModels(); } }
         }
 
         private bool _exportRoomGeometry;
         public bool ExportRoomGeometry
         {
             get => _exportRoomGeometry;
-            set { if (SetProperty(ref _exportRoomGeometry, value)) { _configManager.CurrentSettings.Export.ExportRoomGeometry = value; _configManager.SaveConfiguration(); } }
+            set { if (SetProperty(ref _exportRoomGeometry, value)) { _configManager.CurrentSettings.Export.ExportRoomGeometry = value; _configManager.SaveConfiguration(); SelectNeedsExportModels(); } }
         }
 
         private bool _exportUrls;
         public bool ExportUrls
         {
             get => _exportUrls;
-            set { if (SetProperty(ref _exportUrls, value)) { _configManager.CurrentSettings.Export.ExportUrls = value; _configManager.SaveConfiguration(); } }
+            set { if (SetProperty(ref _exportUrls, value)) { _configManager.CurrentSettings.Export.ExportUrls = value; _configManager.SaveConfiguration(); SelectNeedsExportModels(); } }
         }
 
         private bool _findMissingMaterials;
         public bool FindMissingMaterials
         {
             get => _findMissingMaterials;
-            set { if (SetProperty(ref _findMissingMaterials, value)) { _configManager.CurrentSettings.Export.FindMissingMaterials = value; _configManager.SaveConfiguration(); } }
+            set { if (SetProperty(ref _findMissingMaterials, value)) { _configManager.CurrentSettings.Export.FindMissingMaterials = value; _configManager.SaveConfiguration(); SelectNeedsExportModels(); } }
         }
 
         private bool _exportAllParameters;
         public bool ExportAllParameters
         {
             get => _exportAllParameters;
-            set { if (SetProperty(ref _exportAllParameters, value)) { _configManager.CurrentSettings.Export.ExportAllParameters = value; _configManager.SaveConfiguration(); } }
+            set { if (SetProperty(ref _exportAllParameters, value)) { _configManager.CurrentSettings.Export.ExportAllParameters = value; _configManager.SaveConfiguration(); SelectNeedsExportModels(); } }
         }
 
         private bool _exportElementParameters;
         public bool ExportElementParameters
         {
             get => _exportElementParameters;
-            set { if (SetProperty(ref _exportElementParameters, value)) { _configManager.CurrentSettings.Export.ExportElementParameters = value; _configManager.SaveConfiguration(); } }
+            set { if (SetProperty(ref _exportElementParameters, value)) { _configManager.CurrentSettings.Export.ExportElementParameters = value; _configManager.SaveConfiguration(); SelectNeedsExportModels(); } }
         }
 
         private double _facetingFactor = 1.0;
         public double FacetingFactor
         {
             get => _facetingFactor;
-            set { if (SetProperty(ref _facetingFactor, value)) { _configManager.CurrentSettings.Export.FacetingFactor = value; _configManager.SaveConfiguration(); } }
+            set { if (SetProperty(ref _facetingFactor, value)) { _configManager.CurrentSettings.Export.FacetingFactor = value; _configManager.SaveConfiguration(); SelectNeedsExportModels(); } }
         }
 
         private string _overwritePolicy = "Overwrite";
@@ -237,9 +230,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
             private set
             {
                 if (SetProperty(ref _isRefreshingModelDates, value))
-                {
                     (RefreshModelDatesCommand as RelayCommand)?.RaiseCanExecuteChanged();
-                }
             }
         }
 
@@ -250,9 +241,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
             set
             {
                 if (SetProperty(ref _selectedJob, value))
-                {
                     (EditModelCommand as RelayCommand)?.RaiseCanExecuteChanged();
-                }
             }
         }
 
@@ -272,10 +261,6 @@ namespace ScheduledNwcExporter.UI.ViewModels
 
         public bool HasExactlyOneSelectedJob => SelectedJobCount == 1;
 
-        /// <summary>
-        /// Receives the DataGrid's extended-selection count so single-record actions
-        /// cannot silently operate on an arbitrary active row from a multi-selection.
-        /// </summary>
         public void UpdateSelectedJobCount(int selectedJobCount)
         {
             SelectedJobCount = selectedJobCount;
@@ -296,9 +281,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
             set
             {
                 if (SetProperty(ref _selectedQueueFilter, value))
-                {
                     JobsView?.Refresh();
-                }
             }
         }
 
@@ -320,51 +303,16 @@ namespace ScheduledNwcExporter.UI.ViewModels
         }
 
         public bool HasSelectedSlot => SelectedSlot != null;
-
         public List<int> ScheduleHours { get; } = Enumerable.Range(0, 24).ToList();
         public List<int> ScheduleMinutes { get; } = Enumerable.Range(0, 60).ToList();
 
-        public bool IsMonday
-        {
-            get => IsSelectedSlotScheduledOn(DayOfWeek.Monday);
-            set => SetSelectedSlotDay(DayOfWeek.Monday, value);
-        }
-
-        public bool IsTuesday
-        {
-            get => IsSelectedSlotScheduledOn(DayOfWeek.Tuesday);
-            set => SetSelectedSlotDay(DayOfWeek.Tuesday, value);
-        }
-
-        public bool IsWednesday
-        {
-            get => IsSelectedSlotScheduledOn(DayOfWeek.Wednesday);
-            set => SetSelectedSlotDay(DayOfWeek.Wednesday, value);
-        }
-
-        public bool IsThursday
-        {
-            get => IsSelectedSlotScheduledOn(DayOfWeek.Thursday);
-            set => SetSelectedSlotDay(DayOfWeek.Thursday, value);
-        }
-
-        public bool IsFriday
-        {
-            get => IsSelectedSlotScheduledOn(DayOfWeek.Friday);
-            set => SetSelectedSlotDay(DayOfWeek.Friday, value);
-        }
-
-        public bool IsSaturday
-        {
-            get => IsSelectedSlotScheduledOn(DayOfWeek.Saturday);
-            set => SetSelectedSlotDay(DayOfWeek.Saturday, value);
-        }
-
-        public bool IsSunday
-        {
-            get => IsSelectedSlotScheduledOn(DayOfWeek.Sunday);
-            set => SetSelectedSlotDay(DayOfWeek.Sunday, value);
-        }
+        public bool IsMonday { get => IsSelectedSlotScheduledOn(DayOfWeek.Monday); set => SetSelectedSlotDay(DayOfWeek.Monday, value); }
+        public bool IsTuesday { get => IsSelectedSlotScheduledOn(DayOfWeek.Tuesday); set => SetSelectedSlotDay(DayOfWeek.Tuesday, value); }
+        public bool IsWednesday { get => IsSelectedSlotScheduledOn(DayOfWeek.Wednesday); set => SetSelectedSlotDay(DayOfWeek.Wednesday, value); }
+        public bool IsThursday { get => IsSelectedSlotScheduledOn(DayOfWeek.Thursday); set => SetSelectedSlotDay(DayOfWeek.Thursday, value); }
+        public bool IsFriday { get => IsSelectedSlotScheduledOn(DayOfWeek.Friday); set => SetSelectedSlotDay(DayOfWeek.Friday, value); }
+        public bool IsSaturday { get => IsSelectedSlotScheduledOn(DayOfWeek.Saturday); set => SetSelectedSlotDay(DayOfWeek.Saturday, value); }
+        public bool IsSunday { get => IsSelectedSlotScheduledOn(DayOfWeek.Sunday); set => SetSelectedSlotDay(DayOfWeek.Sunday, value); }
 
         public ICommand AddModelCommand { get; }
         public ICommand EditModelCommand { get; }
@@ -381,7 +329,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
         public ICommand RemoveSlotCommand { get; }
         public ICommand RefreshModelDatesCommand { get; }
         public ICommand ResetQueueOrderCommand { get; }
-        // Removed separate job commands in favor of unified settings export/import
+        public ICommand SelectNeedsExportCommand { get; }
 
         public MainViewModel(ConfigurationManager configManager, ILogger logger, ExportQueueExternalEventHandler queueHandler, ScheduleManager? scheduleManager)
         {
@@ -395,8 +343,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
             _logger.DebugMode = settings.DebugMode;
             _isSchedulerEnabled = settings.Scheduler.IsSchedulerEnabled;
             _scheduledTimeString = $"{settings.Scheduler.ScheduledHour:D2}:{settings.Scheduler.ScheduledMinute:D2}";
-            
-            // Initialize Export Settings
+
             _convertElementProperties = settings.Export.ConvertElementProperties;
             _divideFileIntoLevels = settings.Export.DivideFileIntoLevels;
             _exportElementIds = settings.Export.ExportElementIds;
@@ -412,24 +359,20 @@ namespace ScheduledNwcExporter.UI.ViewModels
             _facetingFactor = settings.Export.FacetingFactor;
             _overwritePolicy = settings.Export.OverwritePolicy;
             _useTemporaryCopyWithoutRevitLinks = settings.Export.UseTemporaryCopyWithoutRevitLinks;
+
             foreach (var job in settings.Jobs)
             {
-                // Reset status on startup so they appear clean without success colors until run
-                if (job.Status == JobStatus.Success || job.Status == JobStatus.Failed || job.Status == JobStatus.Processing)
-                {
+                if (job.Status == JobStatus.Success || job.Status == JobStatus.Failed || job.Status == JobStatus.Processing || job.Status == JobStatus.Retrying)
                     job.Status = JobStatus.Ready;
-                }
                 job.ProgressPercentage = 0;
                 job.CurrentStage = string.Empty;
             }
+
             Jobs = new ObservableCollection<ModelExportJob>(settings.Jobs);
             JobsView = CollectionViewSource.GetDefaultView(Jobs);
             JobsView.Filter = MatchesQueueFilter;
             ApplyDefaultQueueOrdering();
-            foreach (ModelExportJob job in Jobs)
-            {
-                SubscribeToJobChanges(job);
-            }
+            foreach (ModelExportJob job in Jobs) SubscribeToJobChanges(job);
 
             if (settings.Scheduler.Slots != null)
             {
@@ -441,10 +384,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
             }
             SelectedSlot = ScheduleSlots.FirstOrDefault();
 
-            // AUDIT FIX: Scheduler lifecycle is now managed at App level. 
-            // The ViewModel just listens for UI updates.
             _scheduleManager.ScheduledTimeReached += ScheduleManager_ScheduledTimeReached;
-            
             _queueHandler.ProgressChanged += QueueHandler_ProgressChanged;
             _queueHandler.SessionCompleted += QueueHandler_SessionCompleted;
 
@@ -453,7 +393,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
             RemoveModelCommand = new RelayCommand(RemoveModel, () => SelectedJob != null);
             AddSlotCommand = new RelayCommand(AddSlot);
             RemoveSlotCommand = new RelayCommand(RemoveSlot, () => SelectedSlot != null);
-            RunNowCommand = new RelayCommand(() => StartQueue(Jobs.Where(job => job.IsEnabled), SessionTriggerSource.Manual));
+            RunNowCommand = new RelayCommand(() => StartQueue(Jobs.Where(job => job.IsEnabled && job.IsSelectedForRun), SessionTriggerSource.Manual));
             PauseCommand = new RelayCommand(PauseQueue, () => _queueHandler.IsSessionRunning);
             TestSelectedCommand = new RelayCommand(() =>
             {
@@ -466,29 +406,29 @@ namespace ScheduledNwcExporter.UI.ViewModels
             ImportSettingsCommand = new RelayCommand(ImportSettingsFromFile);
             RefreshModelDatesCommand = new RelayCommand(RefreshModelDatesAsync, () => !IsRefreshingModelDates && !_queueHandler.IsSessionRunning);
             ResetQueueOrderCommand = new RelayCommand(ApplyDefaultQueueOrdering);
+            SelectNeedsExportCommand = new RelayCommand(SelectNeedsExportModels, () => !_queueHandler.IsSessionRunning);
 
+            SelectNeedsExportModels();
             UpdateNextRunText();
             RefreshModelDatesAsync();
         }
 
         public void Shutdown()
         {
-            // AUDIT FIX: Do NOT stop the scheduler on window close. It must persist at App level.
-            if (_scheduleManager != null)
-            {
-                _scheduleManager.ScheduledTimeReached -= ScheduleManager_ScheduledTimeReached;
-            }
+            _scheduleManager.ScheduledTimeReached -= ScheduleManager_ScheduledTimeReached;
             _queueHandler.ProgressChanged -= QueueHandler_ProgressChanged;
             _queueHandler.SessionCompleted -= QueueHandler_SessionCompleted;
-            foreach (ModelExportJob job in Jobs)
-            {
-                UnsubscribeFromJobChanges(job);
-            }
+            foreach (ModelExportJob job in Jobs) UnsubscribeFromJobChanges(job);
         }
 
         private void ScheduleManager_ScheduledTimeReached(object sender, EventArgs e)
         {
-            _uiDispatcher.Invoke(() => StartQueue(Jobs.Where(job => job.IsEnabled), SessionTriggerSource.Scheduler));
+            _uiDispatcher.Invoke(() =>
+            {
+                IEnumerable<ModelExportJob> dueJobs = Jobs.Where(job =>
+                    job.IsEnabled && FreshnessEvaluator.Evaluate(job, _configManager.CurrentSettings).NeedsExport);
+                StartQueue(dueJobs, SessionTriggerSource.Scheduler);
+            });
         }
 
         private async void RefreshModelDatesAsync()
@@ -536,10 +476,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
                             continue;
                         }
 
-                        if (apsClient == null)
-                        {
-                            apsClient = new APSClient(accessToken, _logger);
-                        }
+                        if (apsClient == null) apsClient = new APSClient(accessToken, _logger);
 
                         var metadata = await apsClient.GetLatestItemMetadataAsync(job.CloudDataProjectId, job.CloudItemId);
                         job.LastSourceModifiedUtc = metadata.LastModifiedUtc;
@@ -558,12 +495,28 @@ namespace ScheduledNwcExporter.UI.ViewModels
                 }
 
                 SaveJobs();
+                SelectNeedsExportModels();
+                JobsView.Refresh();
                 CurrentActivityStage = "Model modification dates refreshed.";
             }
             finally
             {
                 IsRefreshingModelDates = false;
             }
+        }
+
+        private void SelectNeedsExportModels()
+        {
+            int selectedCount = 0;
+            foreach (ModelExportJob job in Jobs)
+            {
+                FreshnessEvaluation evaluation = FreshnessEvaluator.Evaluate(job, _configManager.CurrentSettings);
+                job.IsSelectedForRun = job.IsEnabled && evaluation.NeedsExport;
+                if (job.IsSelectedForRun) selectedCount++;
+            }
+
+            JobsView?.Refresh();
+            _logger.Info("UI", $"Smart run selection selected {selectedCount} of {Jobs.Count} model(s) that are enabled and require a verified export.", string.Empty, "FreshnessSelection");
         }
 
         private bool MatchesQueueFilter(object item)
@@ -573,9 +526,9 @@ namespace ScheduledNwcExporter.UI.ViewModels
             switch (SelectedQueueFilter)
             {
                 case "Needs Export":
-                    return !job.LastSuccessfulExportUtc.HasValue || (job.ExportLag.HasValue && job.ExportLag.Value.TotalMinutes > 0);
+                    return FreshnessEvaluator.Evaluate(job, _configManager.CurrentSettings).NeedsExport;
                 case "Current":
-                    return job.LastSuccessfulExportUtc.HasValue && job.ExportLag.HasValue && job.ExportLag.Value.TotalMinutes <= 0;
+                    return !FreshnessEvaluator.Evaluate(job, _configManager.CurrentSettings).NeedsExport;
                 case "Failed":
                     return job.Status == JobStatus.Failed || job.LatestRunStatus == JobStatus.Failed;
                 case "Cloud":
@@ -616,7 +569,10 @@ namespace ScheduledNwcExporter.UI.ViewModels
                 e.PropertyName == nameof(ModelExportJob.QueuePriority) ||
                 e.PropertyName == nameof(ModelExportJob.ExportLag) ||
                 e.PropertyName == nameof(ModelExportJob.LastSuccessfulExportUtc) ||
-                e.PropertyName == nameof(ModelExportJob.IsCloud))
+                e.PropertyName == nameof(ModelExportJob.LastSourceModifiedUtc) ||
+                e.PropertyName == nameof(ModelExportJob.CloudVersionId) ||
+                e.PropertyName == nameof(ModelExportJob.IsCloud) ||
+                e.PropertyName == nameof(ModelExportJob.IsSelectedForRun))
             {
                 _uiDispatcher.BeginInvoke(new Action(() => JobsView?.Refresh()));
             }
@@ -627,6 +583,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
             var dialog = new Views.JobEditorWindow(null);
             if (dialog.ShowDialog() == true && dialog.Job != null)
             {
+                dialog.Job.IsSelectedForRun = dialog.Job.IsEnabled && FreshnessEvaluator.Evaluate(dialog.Job, _configManager.CurrentSettings).NeedsExport;
                 Jobs.Add(dialog.Job);
                 SubscribeToJobChanges(dialog.Job);
                 SaveJobs();
@@ -645,9 +602,11 @@ namespace ScheduledNwcExporter.UI.ViewModels
                 if (index >= 0)
                 {
                     UnsubscribeFromJobChanges(SelectedJob);
+                    dialog.Job.IsSelectedForRun = dialog.Job.IsEnabled && FreshnessEvaluator.Evaluate(dialog.Job, _configManager.CurrentSettings).NeedsExport;
                     Jobs[index] = dialog.Job;
                     SubscribeToJobChanges(dialog.Job);
                     SaveJobs();
+                    JobsView.Refresh();
                     _logger.Info("UI", $"Updated export job: {dialog.Job.SourceModelPath}");
                 }
             }
@@ -668,23 +627,19 @@ namespace ScheduledNwcExporter.UI.ViewModels
             if (_queueHandler.IsSessionRunning)
             {
                 if (triggerSource == SessionTriggerSource.Manual)
-                {
                     MessageBox.Show("An export session is already running.", "Scheduled NWC Export Manager", MessageBoxButton.OK, MessageBoxImage.Warning);
-                }
                 else
-                {
                     _logger.Warning("Scheduler", "A scheduled export was skipped because a session is already in progress.");
-                }
                 return;
             }
 
-            var jobList = jobs.ToList();
+            var jobList = jobs.Where(job => job.IsEnabled).ToList();
             if (jobList.Count == 0)
             {
                 if (triggerSource == SessionTriggerSource.Manual)
-                {
-                    MessageBox.Show("There are no enabled export jobs to run.", "Scheduled NWC Export Manager", MessageBoxButton.OK, MessageBoxImage.Information);
-                }
+                    MessageBox.Show("There are no enabled and selected export jobs to run.", "Scheduled NWC Export Manager", MessageBoxButton.OK, MessageBoxImage.Information);
+                else
+                    _logger.Info("Scheduler", "Scheduled run found no enabled models that require export.", string.Empty, "FreshnessSelection");
                 return;
             }
 
@@ -700,9 +655,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
             {
                 CurrentActivityStage = "Unable to queue export session.";
                 if (triggerSource == SessionTriggerSource.Manual)
-                {
                     MessageBox.Show("The export queue could not be started. The add-in may be shutting down.", "Scheduled NWC Export Manager", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
             }
         }
 
@@ -741,21 +694,17 @@ namespace ScheduledNwcExporter.UI.ViewModels
             CurrentActivityStage = string.IsNullOrWhiteSpace(summary.SessionError) ? "Completed" : summary.SessionError;
             OverallProgressPercentage = 100;
             SaveJobs();
+            SelectNeedsExportModels();
 
-            // AUDIT FIX: Only show MessageBox for manual runs. Scheduled runs should remain unattended.
             if (summary.TriggerSource == SessionTriggerSource.Manual)
             {
                 _uiDispatcher.BeginInvoke(new Action(() =>
                 {
                     string message = $"Export session finished.\n\nTotal: {summary.TotalModels}\nSuccessful: {summary.Successful}\nFailed: {summary.Failed}\nSkipped: {summary.Skipped}\nCancelled: {summary.Cancelled}\nDuration: {summary.Duration:hh\\:mm\\:ss}";
                     if (summary.FailedModels.Count > 0)
-                    {
                         message += "\n\nFailed Models:\n- " + string.Join("\n- ", summary.FailedModels);
-                    }
                     if (!string.IsNullOrWhiteSpace(summary.SessionError))
-                    {
                         message += $"\n\nSession Error:\n{summary.SessionError}";
-                    }
 
                     MessageBox.Show(message, "Scheduled NWC Export Manager", MessageBoxButton.OK,
                         summary.Failed > 0 || !string.IsNullOrWhiteSpace(summary.SessionError) ? MessageBoxImage.Warning : MessageBoxImage.Information);
@@ -772,13 +721,9 @@ namespace ScheduledNwcExporter.UI.ViewModels
             try
             {
                 if (File.Exists(_logger.LogFilePath))
-                {
                     new Views.LogViewerWindow(_logger.LogFilePath).Show();
-                }
                 else
-                {
                     MessageBox.Show("Log file does not exist yet.", "Hatco NWC Exporter", MessageBoxButton.OK, MessageBoxImage.Information);
-                }
             }
             catch (Exception ex)
             {
@@ -793,8 +738,12 @@ namespace ScheduledNwcExporter.UI.ViewModels
 
         private void SaveConfig()
         {
-            _configManager.SaveConfiguration();
-            MessageBox.Show("Configuration saved successfully.", "Hatco NWC Exporter", MessageBoxButton.OK, MessageBoxImage.Information);
+            bool saved = _configManager.SaveConfiguration();
+            MessageBox.Show(
+                saved ? "Configuration saved successfully." : "Configuration could not be saved. Check the log for details.",
+                "Hatco NWC Exporter",
+                MessageBoxButton.OK,
+                saved ? MessageBoxImage.Information : MessageBoxImage.Error);
         }
 
         private void ExportSettingsToFile()
@@ -836,7 +785,6 @@ namespace ScheduledNwcExporter.UI.ViewModels
                 try
                 {
                     _configManager.ImportUnifiedSettings(dlg.FileName);
-                    // Refresh view model properties from updated config
                     AppSettings settings = _configManager.CurrentSettings;
                     IsSchedulerEnabled = settings.Scheduler.IsSchedulerEnabled;
                     ScheduledTimeString = $"{settings.Scheduler.ScheduledHour:D2}:{settings.Scheduler.ScheduledMinute:D2}";
@@ -856,22 +804,18 @@ namespace ScheduledNwcExporter.UI.ViewModels
                     FacetingFactor = settings.Export.FacetingFactor;
                     OverwritePolicy = settings.Export.OverwritePolicy;
 
-                    foreach (var existingJob in Jobs)
-                    {
-                        UnsubscribeFromJobChanges(existingJob);
-                    }
+                    foreach (var existingJob in Jobs) UnsubscribeFromJobChanges(existingJob);
                     Jobs.Clear();
                     foreach (var job in settings.Jobs)
                     {
+                        job.IsSelectedForRun = job.IsEnabled && FreshnessEvaluator.Evaluate(job, settings).NeedsExport;
                         Jobs.Add(job);
                         SubscribeToJobChanges(job);
                     }
                     JobsView.Refresh();
 
                     foreach (var existingSlot in ScheduleSlots)
-                    {
                         existingSlot.PropertyChanged -= ScheduleSlot_PropertyChanged;
-                    }
 
                     ScheduleSlots.Clear();
                     if (settings.Scheduler.Slots != null)
@@ -884,6 +828,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
                     }
 
                     SelectedSlot = ScheduleSlots.FirstOrDefault();
+                    SelectNeedsExportModels();
 
                     MessageBox.Show("Configuration imported successfully. UI and queue have been updated.", "Hatco NWC Exporter", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
@@ -930,14 +875,11 @@ namespace ScheduledNwcExporter.UI.ViewModels
             slot.PropertyChanged += ScheduleSlot_PropertyChanged;
         }
 
-        private void ScheduleSlot_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        private void ScheduleSlot_PropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             SaveJobs();
             UpdateNextRunText();
-            if (ReferenceEquals(sender, SelectedSlot))
-            {
-                RefreshSelectedSlotDayFlags();
-            }
+            if (ReferenceEquals(sender, SelectedSlot)) RefreshSelectedSlotDayFlags();
         }
 
         private bool IsSelectedSlotScheduledOn(DayOfWeek day)
@@ -950,14 +892,8 @@ namespace ScheduledNwcExporter.UI.ViewModels
             if (SelectedSlot == null) return;
 
             var updatedDays = new List<DayOfWeek>(SelectedSlot.Days ?? new List<DayOfWeek>());
-            if (isScheduled && !updatedDays.Contains(day))
-            {
-                updatedDays.Add(day);
-            }
-            else if (!isScheduled)
-            {
-                updatedDays.Remove(day);
-            }
+            if (isScheduled && !updatedDays.Contains(day)) updatedDays.Add(day);
+            else if (!isScheduled) updatedDays.Remove(day);
 
             SelectedSlot.Days = updatedDays.OrderBy(d => (int)d).ToList();
         }
@@ -989,15 +925,9 @@ namespace ScheduledNwcExporter.UI.ViewModels
             }
 
             if (activeSlots.Count == 1)
-            {
                 NextRunText = $"Next run: {activeSlots[0].TimeDisplay} ({activeSlots[0].DaysDisplay})";
-            }
             else
-            {
                 NextRunText = $"Scheduler Active ({activeSlots.Count} slots)";
-            }
         }
     }
-
-
 }
