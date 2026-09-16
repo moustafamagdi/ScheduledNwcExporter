@@ -10,7 +10,7 @@ namespace ScheduledNwcExporter.Application
     /// <summary>
     /// Revit external application entry point and owner of the modeless export manager window.
     /// </summary>
-        public class App : IExternalApplication
+    public class App : IExternalApplication
     {
         internal static MainWindow? ExportManagerWindow { get; set; }
         internal static Configuration.ConfigurationManager? ConfigManager { get; private set; }
@@ -26,11 +26,37 @@ namespace ScheduledNwcExporter.Application
 
             try
             {
-                // AUDIT FIX: Initialize core services at App level to support unattended scheduling
+                // Initialize core services at App level to support unattended scheduling.
                 ConfigManager = new Configuration.ConfigurationManager();
                 Logger = new Logging.FileLogger { DebugMode = ConfigManager.CurrentSettings.DebugMode };
-                
-                // Use current dispatcher (Revit main thread) for the queue handler
+
+                // Clean legacy/duplicated day entries once at startup. This keeps both the
+                // schedule grid and the header summary compact (7 unique days => "Daily").
+                bool scheduleNormalized = false;
+                if (ConfigManager.CurrentSettings.Scheduler.Slots != null)
+                {
+                    foreach (var slot in ConfigManager.CurrentSettings.Scheduler.Slots)
+                    {
+                        var normalizedDays = (slot.Days ?? new List<DayOfWeek>())
+                            .Distinct()
+                            .OrderBy(d => d == DayOfWeek.Sunday ? 7 : (int)d)
+                            .ToList();
+
+                        if (slot.Days == null || !slot.Days.SequenceEqual(normalizedDays))
+                        {
+                            slot.Days = normalizedDays;
+                            scheduleNormalized = true;
+                        }
+                    }
+                }
+
+                if (scheduleNormalized)
+                {
+                    ConfigManager.SaveConfiguration();
+                    Logger.Info("Scheduler", "Normalized duplicate schedule-day entries in configuration.");
+                }
+
+                // Use current dispatcher (Revit main thread) for the queue handler.
                 QueueHandler = new Revit.ExternalEvents.ExportQueueExternalEventHandler(
                     Logger,
                     ConfigManager.CurrentSettings,
@@ -39,9 +65,13 @@ namespace ScheduledNwcExporter.Application
                 QueueEvent = ExternalEvent.Create(QueueHandler);
                 QueueHandler.AttachExternalEvent(QueueEvent);
 
+                // Dialog interception is deliberately active only while an export session is running,
+                // so normal interactive Revit work is never auto-answered by this add-in.
+                application.DialogBoxShowing += UnattendedDialogHandler.OnDialogBoxShowing;
+
                 Scheduler = new Scheduler.ScheduleManager(ConfigManager.CurrentSettings, Logger);
                 Scheduler.ScheduledTimeReached += OnScheduledTimeReached;
-                
+
                 if (ConfigManager.CurrentSettings.Scheduler.IsSchedulerEnabled)
                 {
                     Scheduler.Start();
@@ -105,11 +135,10 @@ namespace ScheduledNwcExporter.Application
             // If the window is open, let the ViewModel handle it to update the UI
             if (ExportManagerWindow != null && ExportManagerWindow.IsVisible)
             {
-                // The ViewModel is already subscribed to this event in the current implementation
                 return;
             }
 
-            // AUDIT FIX: Unattended background run when window is closed
+            // Unattended background run when window is closed.
             var activeJobs = ConfigManager.CurrentSettings.Jobs.Where(j => j.IsEnabled).ToList();
             if (activeJobs.Count > 0)
             {
@@ -120,6 +149,7 @@ namespace ScheduledNwcExporter.Application
 
         public Result OnShutdown(UIControlledApplication application)
         {
+            application.DialogBoxShowing -= UnattendedDialogHandler.OnDialogBoxShowing;
             Scheduler?.Stop();
             Core.AssemblyLoader.Unregister();
 
