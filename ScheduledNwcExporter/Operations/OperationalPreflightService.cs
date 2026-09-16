@@ -58,9 +58,9 @@ namespace ScheduledNwcExporter.Operations
                 });
             }
 
-            foreach (ModelExportJob job in jobList)
+            foreach (ModelExportJob job in jobList.Where(job => !job.IsCloud))
             {
-                if (!job.IsCloud && !File.Exists(job.SourceModelPath))
+                if (!File.Exists(job.SourceModelPath))
                 {
                     result.Issues.Add(new PreflightIssue
                     {
@@ -68,47 +68,58 @@ namespace ScheduledNwcExporter.Operations
                         Message = $"Source model not found: {job.SourceModelPath}"
                     });
                 }
+            }
 
-                if (string.IsNullOrWhiteSpace(job.OutputDirectory))
+            var outputGroups = jobList
+                .Where(job => !string.IsNullOrWhiteSpace(job.OutputDirectory))
+                .GroupBy(job => job.OutputDirectory.Trim(), StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            foreach (ModelExportJob job in jobList.Where(job => string.IsNullOrWhiteSpace(job.OutputDirectory)))
+            {
+                result.Issues.Add(new PreflightIssue
                 {
-                    result.Issues.Add(new PreflightIssue
-                    {
-                        Severity = PreflightSeverity.Error,
-                        Message = $"Output folder is not configured for {job.DisplaySourcePath}."
-                    });
-                    continue;
-                }
+                    Severity = PreflightSeverity.Error,
+                    Message = $"Output folder is not configured for {job.DisplaySourcePath}."
+                });
+            }
 
+            var warnedRoots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var outputGroup in outputGroups)
+            {
+                string outputDirectory = outputGroup.Key;
                 try
                 {
-                    Directory.CreateDirectory(job.OutputDirectory);
-                    string probe = Path.Combine(job.OutputDirectory, ".hatco_nwc_write_probe_" + Guid.NewGuid().ToString("N") + ".tmp");
+                    Directory.CreateDirectory(outputDirectory);
+                    string probe = Path.Combine(outputDirectory, ".hatco_nwc_write_probe_" + Guid.NewGuid().ToString("N") + ".tmp");
                     File.WriteAllText(probe, "probe");
                     File.Delete(probe);
                 }
                 catch (Exception ex)
                 {
+                    string affectedModels = string.Join(", ", outputGroup.Select(job => job.DisplaySourcePath).Take(3));
+                    if (outputGroup.Count() > 3) affectedModels += $" (+{outputGroup.Count() - 3} more)";
                     result.Issues.Add(new PreflightIssue
                     {
                         Severity = PreflightSeverity.Error,
-                        Message = $"Output folder is not writable for {job.DisplaySourcePath}: {job.OutputDirectory} ({ex.Message})"
+                        Message = $"Output folder is not writable: {outputDirectory} ({ex.Message}). Affected: {affectedModels}"
                     });
                     continue;
                 }
 
-                TryAddDiskWarning(job.OutputDirectory, result);
+                TryAddDiskWarning(outputDirectory, result, warnedRoots);
             }
 
             return result;
         }
 
-        private static void TryAddDiskWarning(string outputDirectory, PreflightResult result)
+        private static void TryAddDiskWarning(string outputDirectory, PreflightResult result, HashSet<string> warnedRoots)
         {
             try
             {
                 if (outputDirectory.StartsWith("\\\\", StringComparison.OrdinalIgnoreCase)) return;
                 string root = Path.GetPathRoot(Path.GetFullPath(outputDirectory));
-                if (string.IsNullOrWhiteSpace(root)) return;
+                if (string.IsNullOrWhiteSpace(root) || !warnedRoots.Add(root)) return;
 
                 var drive = new DriveInfo(root);
                 if (!drive.IsReady) return;
