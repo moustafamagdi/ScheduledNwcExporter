@@ -35,8 +35,9 @@ namespace ScheduledNwcExporter.Revit.ExternalEvents
     }
 
     /// <summary>
-    /// Revit-owned queue dispatcher for the modeless WPF interface. Every Revit API call occurs
-    /// only inside Execute, which Revit invokes after ExternalEvent.Raise().
+    /// Revit-owned queue dispatcher for the modeless WPF interface. Revit API work happens only
+    /// inside Execute. Retry waiting happens on DispatcherTimer between ExternalEvent executions,
+    /// never through Thread.Sleep while Revit owns the API context.
     /// </summary>
     public sealed class ExportQueueExternalEventHandler : IExternalEventHandler
     {
@@ -48,7 +49,9 @@ namespace ScheduledNwcExporter.Revit.ExternalEvents
         private readonly ExportSessionSummary _summary = new ExportSessionSummary();
 
         private ExternalEvent? _externalEvent;
+        private DispatcherTimer? _retryTimer;
         private int _nextJobIndex;
+        private int _currentAttempt = 1;
         private DateTime _sessionStartedAt;
         private bool _cancelRequested;
         private bool _exporterValidated;
@@ -71,19 +74,19 @@ namespace ScheduledNwcExporter.Revit.ExternalEvents
             _externalEvent = externalEvent ?? throw new ArgumentNullException(nameof(externalEvent));
         }
 
-        /// <summary>
-        /// Starts a queue by raising the Revit-owned external event. No Revit API access happens in this method.
-        /// </summary>
         public bool Start(IEnumerable<ModelExportJob> jobs, SessionTriggerSource triggerSource = SessionTriggerSource.Manual)
         {
             if (IsSessionRunning || _externalEvent == null)
-            {
                 return false;
-            }
 
             _jobs.Clear();
             _jobs.AddRange(jobs ?? Enumerable.Empty<ModelExportJob>());
+            if (_jobs.Count == 0)
+                return false;
+
+            StopRetryTimer();
             _nextJobIndex = 0;
+            _currentAttempt = 1;
             _cancelRequested = false;
             _exporterValidated = false;
             _sessionStartedAt = DateTime.Now;
@@ -100,38 +103,60 @@ namespace ScheduledNwcExporter.Revit.ExternalEvents
             _summary.TriggerSource = triggerSource;
 
             _logger.Info("Scheduler", $"Export session queued. Total models: {_summary.TotalModels}.");
-            
-            string firstModelName = _jobs.Count > 0 ? GetSafeModelName(_jobs[0].SourceModelPath) : string.Empty;
+            string firstModelName = GetSafeModelName(_jobs[0].SourceModelPath);
             PublishProgress(firstModelName, "Waiting for Revit to become idle to begin processing…");
-            
             _externalEvent.Raise();
             return true;
         }
 
-        /// <summary>
-        /// Requests cooperative cancellation. The active Revit operation finishes at its next safe boundary.
-        /// </summary>
         public void RequestCancellation()
         {
             if (!IsSessionRunning) return;
 
             _cancelRequested = true;
-            _logger.Warning("Scheduler", "Cancellation requested. The queue will stop before the next model begins.", string.Empty, "Cancellation");
+            _logger.Warning("Scheduler", "Cancellation requested. The queue will stop at the next safe boundary.", string.Empty, "Cancellation");
+
+            // If we are currently waiting between retries, wake the ExternalEvent immediately so
+            // cancellation does not have to wait for the retry delay to expire.
+            if (_retryTimer != null)
+            {
+                StopRetryTimer();
+                _externalEvent?.Raise();
+            }
         }
 
         public void Execute(UIApplication application)
         {
-            if (!IsSessionRunning)
-            {
-                return;
-            }
+            if (!IsSessionRunning) return;
 
             try
             {
-                // Immediately update UI to show we have entered the Revit API context
+                if (_nextJobIndex >= _jobs.Count)
+                {
+                    CompleteSession();
+                    return;
+                }
+
                 ModelExportJob currentJob = _jobs[_nextJobIndex];
                 string modelName = GetSafeModelName(currentJob.SourceModelPath);
-                PublishProgress(modelName, $"Revit context acquired. Starting model {_nextJobIndex + 1} of {_jobs.Count}…");
+                var processor = new JobProcessor(application.Application, _settings, _logger);
+
+                if (_cancelRequested)
+                {
+                    var cancelled = new JobExecutionResult
+                    {
+                        ModelName = modelName,
+                        Cancelled = true,
+                        ErrorMessage = "Cancelled before beginning the next Revit operation."
+                    };
+                    processor.FinalizeJob(currentJob, cancelled, PublishProgress);
+                    _summary.Cancelled++;
+                    _nextJobIndex++;
+                    CompleteSession();
+                    return;
+                }
+
+                PublishProgress(modelName, $"Revit context acquired. Model {_nextJobIndex + 1} of {_jobs.Count}; attempt {_currentAttempt}…");
 
                 if (!_exporterValidated)
                 {
@@ -143,40 +168,32 @@ namespace ScheduledNwcExporter.Revit.ExternalEvents
                         CompleteSession();
                         return;
                     }
-
                     _exporterValidated = true;
                 }
 
-                if (_cancelRequested || _nextJobIndex >= _jobs.Count)
+                JobExecutionResult jobResult = processor.ProcessSingleAttempt(
+                    currentJob,
+                    () => _cancelRequested,
+                    _currentAttempt,
+                    PublishProgress);
+
+                int maximumAttempts = Math.Max(1, currentJob.RetryCount + 1);
+                if (!jobResult.Succeeded &&
+                    !jobResult.Skipped &&
+                    !jobResult.Cancelled &&
+                    jobResult.Retryable &&
+                    _currentAttempt < maximumAttempts)
                 {
-                    CompleteSession();
+                    _currentAttempt++;
+                    ScheduleRetry(currentJob, modelName, maximumAttempts);
                     return;
                 }
 
-                // This is the critical boundary: the document open, workset inspection, link inspection,
-                // NWC export, and close all run inside IExternalEventHandler.Execute.
-                var processor = new JobProcessor(application.Application, _settings, _logger);
-                JobExecutionResult jobResult = processor.ProcessSingleJob(currentJob, () => _cancelRequested, PublishProgress);
-
-                if (jobResult.Succeeded)
-                {
-                    _summary.Successful++;
-                }
-                else if (jobResult.Skipped)
-                {
-                    _summary.Skipped++;
-                }
-                else if (jobResult.Cancelled)
-                {
-                    _summary.Cancelled++;
-                }
-                else
-                {
-                    _summary.Failed++;
-                    _summary.FailedModels.Add($"{jobResult.ModelName}: {jobResult.ErrorMessage}");
-                }
+                processor.FinalizeJob(currentJob, jobResult, PublishProgress);
+                AccumulateResult(jobResult);
 
                 _nextJobIndex++;
+                _currentAttempt = 1;
                 PublishProgress(modelName, currentJob.Status.ToString());
 
                 if (_cancelRequested || _nextJobIndex >= _jobs.Count)
@@ -185,8 +202,6 @@ namespace ScheduledNwcExporter.Revit.ExternalEvents
                     return;
                 }
 
-                // Queue the next ExternalEvent raise on the modeless WPF dispatcher only after this
-                // Execute call returns to Revit. This prevents long-running work on a background thread.
                 _uiDispatcher.BeginInvoke(new Action(RaiseNextJob), DispatcherPriority.ApplicationIdle);
             }
             catch (Exception ex)
@@ -202,18 +217,72 @@ namespace ScheduledNwcExporter.Revit.ExternalEvents
             return "Scheduled NWC Export Queue External Event";
         }
 
+        private void ScheduleRetry(ModelExportJob job, string modelName, int maximumAttempts)
+        {
+            StopRetryTimer();
+            int delaySeconds = Math.Max(0, job.RetryDelaySeconds);
+            string stage = delaySeconds > 0
+                ? $"Retry {_currentAttempt}/{maximumAttempts} in {delaySeconds}s"
+                : $"Retry {_currentAttempt}/{maximumAttempts}";
+
+            job.Status = JobStatus.Retrying;
+            job.CurrentStage = stage;
+            job.ProgressPercentage = 0;
+            PublishProgress(modelName, stage);
+            _logger.Warning("Job", $"Attempt {_currentAttempt - 1} failed. {stage}.", modelName, "Retrying");
+
+            _retryTimer = new DispatcherTimer(DispatcherPriority.ApplicationIdle, _uiDispatcher)
+            {
+                Interval = TimeSpan.FromMilliseconds(Math.Max(1, delaySeconds * 1000))
+            };
+            _retryTimer.Tick += RetryTimer_Tick;
+            _retryTimer.Start();
+        }
+
+        private void RetryTimer_Tick(object? sender, EventArgs e)
+        {
+            StopRetryTimer();
+            if (IsSessionRunning && _externalEvent != null)
+                _externalEvent.Raise();
+        }
+
+        private void StopRetryTimer()
+        {
+            if (_retryTimer == null) return;
+            _retryTimer.Stop();
+            _retryTimer.Tick -= RetryTimer_Tick;
+            _retryTimer = null;
+        }
+
+        private void AccumulateResult(JobExecutionResult result)
+        {
+            if (result.Succeeded)
+            {
+                _summary.Successful++;
+            }
+            else if (result.Skipped)
+            {
+                _summary.Skipped++;
+            }
+            else if (result.Cancelled)
+            {
+                _summary.Cancelled++;
+            }
+            else
+            {
+                _summary.Failed++;
+                _summary.FailedModels.Add($"{result.ModelName}: {result.ErrorMessage}");
+            }
+        }
+
         private void RaiseNextJob()
         {
             if (IsSessionRunning && !_cancelRequested && _externalEvent != null)
-            {
                 _externalEvent.Raise();
-            }
         }
 
         private void PublishProgress(string modelName, string stage)
         {
-            // Use BeginInvoke to ensure UI updates are dispatched to the UI thread
-            // and don't block the Revit execution thread.
             _uiDispatcher.BeginInvoke(new Action(() =>
             {
                 ProgressChanged?.Invoke(this, new ExportSessionProgress
@@ -230,11 +299,9 @@ namespace ScheduledNwcExporter.Revit.ExternalEvents
         {
             if (!IsSessionRunning) return;
 
+            StopRetryTimer();
             IsSessionRunning = false;
             _summary.Duration = DateTime.Now - _sessionStartedAt;
-
-            // Queue-side job state changes (including denied cloud access) must survive unattended
-            // runs where the modeless WPF window and its ViewModel are not present.
             _configurationManager?.SaveConfiguration();
             PublishProgress(string.Empty, string.IsNullOrWhiteSpace(_summary.SessionError) ? "Queue completed." : _summary.SessionError);
             _logger.Info(
@@ -249,7 +316,6 @@ namespace ScheduledNwcExporter.Revit.ExternalEvents
             if (string.IsNullOrWhiteSpace(path)) return "Unknown";
             if (path.StartsWith("acc://", StringComparison.OrdinalIgnoreCase))
             {
-                // Format: acc://ModelName.rvt|Region|ProjectGUID|ModelGUID
                 string temp = path.Substring(6);
                 string[] parts = temp.Split('|');
                 return parts.Length > 0 ? parts[0] : temp;

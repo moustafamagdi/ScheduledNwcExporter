@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Text;
 using Newtonsoft.Json;
 using ScheduledNwcExporter.Logging;
 
@@ -37,11 +38,22 @@ namespace ScheduledNwcExporter.Configuration
             set { _id = value; OnPropertyChanged(); }
         }
 
+        // Persistent eligibility: when false, this job is excluded from both manual and scheduled automation.
         private bool _isEnabled = true;
         public bool IsEnabled
         {
             get => _isEnabled;
             set { _isEnabled = value; OnPropertyChanged(); OnPropertyChanged(nameof(QueuePriority)); }
+        }
+
+        // Transient run selection. This is intentionally not serialized so opening the manager can
+        // recalculate the default selection from current freshness without overwriting IsEnabled.
+        private bool _isSelectedForRun = true;
+        [JsonIgnore]
+        public bool IsSelectedForRun
+        {
+            get => _isSelectedForRun;
+            set { _isSelectedForRun = value; OnPropertyChanged(); }
         }
 
         private string _sourceModelPath = string.Empty;
@@ -62,8 +74,6 @@ namespace ScheduledNwcExporter.Configuration
             }
         }
 
-        // Human-readable hierarchy captured when an ACC model is selected in Cloud Explorer.
-        // The technical acc:// value remains in SourceModelPath for Revit API opening.
         private string _cloudDisplayPath = string.Empty;
         public string CloudDisplayPath
         {
@@ -86,7 +96,6 @@ namespace ScheduledNwcExporter.Configuration
                 if (!IsCloud) return SourceModelPath;
                 if (!string.IsNullOrWhiteSpace(CloudDisplayPath)) return CloudDisplayPath;
 
-                // Fallback for legacy settings files that pre-date CloudDisplayPath.
                 string cloudModelName = "Cloud Model.rvt";
                 try
                 {
@@ -117,8 +126,6 @@ namespace ScheduledNwcExporter.Configuration
             ? (HasCustomSettings ? "ACC cloud model with custom export overrides." : "ACC cloud model.")
             : (HasCustomSettings ? "Local model with custom export overrides." : "Local RVT model.");
 
-        // Data Management identifiers retained for a lightweight refresh of ACC item metadata.
-        // They are not used by Revit when opening the cloud model; Revit continues to use SourceModelPath.
         private string _cloudDataProjectId = string.Empty;
         public string CloudDataProjectId
         {
@@ -363,14 +370,13 @@ namespace ScheduledNwcExporter.Configuration
                 try
                 {
                     if (string.IsNullOrWhiteSpace(_sourceModelPath)) return "Model.nwc";
-                    
+
                     string modelName = "Model";
                     string modelFileName = "Model.rvt";
 
                     if (_sourceModelPath.StartsWith("acc://", StringComparison.OrdinalIgnoreCase))
                     {
-                        // Format: acc://ModelName.rvt|Region|ProjectGUID|ModelGUID
-                        string temp = _sourceModelPath.Substring(6); // Remove acc://
+                        string temp = _sourceModelPath.Substring(6);
                         string[] parts = temp.Split('|');
                         if (parts.Length > 0)
                         {
@@ -410,9 +416,6 @@ namespace ScheduledNwcExporter.Configuration
             }
         }
 
-        // Set only after Revit explicitly reports that the signed-in user is not authorized to open
-        // this cloud model. It prevents unattended schedules from repeatedly entering Revit's modal
-        // cloud-open workflow. Re-selecting the cloud model clears this safeguard.
         private bool _cloudOpenAccessDenied;
         public bool CloudOpenAccessDenied
         {
@@ -581,7 +584,6 @@ namespace ScheduledNwcExporter.Configuration
         {
             get
             {
-                // Unexported models rank before any dated model; otherwise compare actual overdue seconds.
                 if (!LastSuccessfulExportUtc.HasValue) return double.MaxValue;
                 if (!LastSourceModifiedUtc.HasValue) return double.MinValue;
 
@@ -615,7 +617,6 @@ namespace ScheduledNwcExporter.Configuration
             ? LastSuccessfulExportUtc.Value.ToLocalTime().ToString("dd MMM HH:mm")
             : "Not exported";
 
-        // Compatibility property for older JSON configs
         [JsonProperty("LastStatus")]
         private string LastStatusString
         {
@@ -677,7 +678,6 @@ namespace ScheduledNwcExporter.Configuration
         private double _facetingFactor = 1.0;
         public double FacetingFactor { get => _facetingFactor; set { _facetingFactor = value; OnPropertyChanged(); } }
 
-        // Core app settings
         private string _overwritePolicy = "Overwrite";
         public string OverwritePolicy { get => _overwritePolicy; set { _overwritePolicy = value; OnPropertyChanged(); } }
 
@@ -699,16 +699,16 @@ namespace ScheduledNwcExporter.Configuration
         private int _minute = 0;
         public int Minute { get => _minute; set { _minute = value; OnPropertyChanged(); OnPropertyChanged(nameof(TimeDisplay)); } }
 
-        private List<DayOfWeek> _days = new List<DayOfWeek> 
-        { 
-            DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, 
-            DayOfWeek.Thursday, DayOfWeek.Friday 
+        private List<DayOfWeek> _days = new List<DayOfWeek>
+        {
+            DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday,
+            DayOfWeek.Thursday, DayOfWeek.Friday
         };
         public List<DayOfWeek> Days { get => _days; set { _days = value; OnPropertyChanged(); OnPropertyChanged(nameof(DaysDisplay)); } }
 
         [JsonIgnore]
         public string TimeDisplay => $"{Hour:D2}:{Minute:D2}";
-        
+
         [JsonIgnore]
         public string DaysDisplay => Days.Count == 7 ? "Daily" : string.Join(", ", Days.Select(d => d.ToString().Substring(0, 3)));
 
@@ -720,8 +720,6 @@ namespace ScheduledNwcExporter.Configuration
     {
         public bool IsSchedulerEnabled { get; set; } = false;
         public List<ScheduleSlot> Slots { get; set; } = new List<ScheduleSlot>();
-        
-        // Legacy support
         public int ScheduledHour { get; set; } = 19;
         public int ScheduledMinute { get; set; } = 0;
     }
@@ -738,13 +736,13 @@ namespace ScheduledNwcExporter.Configuration
     {
         private readonly string _configDirectory;
         private readonly string _configFilePath;
-        private readonly FileLogger _logger;
+        private readonly ILogger _logger;
 
         public AppSettings CurrentSettings { get; private set; }
 
-        public ConfigurationManager()
+        public ConfigurationManager(ILogger? logger = null)
         {
-            _logger = new FileLogger();
+            _logger = logger ?? new FileLogger();
             _configDirectory = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                 "MoustafaMagdi",
@@ -774,29 +772,58 @@ namespace ScheduledNwcExporter.Configuration
             }
 
             var defaultSettings = new AppSettings();
-            // Add a sample job if none exist
             defaultSettings.Jobs.Add(new ModelExportJob
             {
                 SourceModelPath = @"C:\Projects\SampleModel.rvt",
                 OutputDirectory = @"C:\ExportedNwc",
                 OutputFileNameTemplate = "{ModelName}_{Date}.nwc",
-                IsEnabled = false
+                IsEnabled = false,
+                IsSelectedForRun = false
             });
             return defaultSettings;
         }
 
-        public void SaveConfiguration()
+        public bool SaveConfiguration()
         {
             try
             {
                 Directory.CreateDirectory(_configDirectory);
                 string json = JsonConvert.SerializeObject(CurrentSettings, Formatting.Indented);
-                File.WriteAllText(_configFilePath, json);
-                _logger.Debug("Config", $"Saved configuration to {_configFilePath}");
+                string tempPath = _configFilePath + ".tmp";
+                string backupPath = _configFilePath + ".bak";
+
+                using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                using (var writer = new StreamWriter(stream, new UTF8Encoding(false)))
+                {
+                    writer.Write(json);
+                    writer.Flush();
+                    stream.Flush(true);
+                }
+
+                if (File.Exists(_configFilePath))
+                {
+                    try
+                    {
+                        File.Replace(tempPath, _configFilePath, backupPath, true);
+                    }
+                    catch
+                    {
+                        File.Copy(tempPath, _configFilePath, true);
+                        File.Delete(tempPath);
+                    }
+                }
+                else
+                {
+                    File.Move(tempPath, _configFilePath);
+                }
+
+                _logger.Debug("Config", $"Saved configuration atomically to {_configFilePath}");
+                return true;
             }
             catch (Exception ex)
             {
                 _logger.Error("Config", $"Failed to save configuration: {ex.Message}", string.Empty, string.Empty, ex);
+                return false;
             }
         }
 
@@ -830,10 +857,9 @@ namespace ScheduledNwcExporter.Configuration
 
                 string json = File.ReadAllText(filePath);
                 var imported = JsonConvert.DeserializeObject<AppSettings>(json);
-                
+
                 if (imported == null) throw new InvalidOperationException("The imported configuration file is empty or invalid.");
 
-                // 1. Create backup of current config
                 if (File.Exists(_configFilePath))
                 {
                     string backupPath = _configFilePath + ".bak_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
@@ -841,18 +867,19 @@ namespace ScheduledNwcExporter.Configuration
                     _logger.Info("Config", $"Created backup of current configuration at {backupPath}");
                 }
 
-                // 2. Apply settings
                 CurrentSettings.Export = imported.Export ?? CurrentSettings.Export;
                 CurrentSettings.Scheduler = imported.Scheduler ?? CurrentSettings.Scheduler;
                 CurrentSettings.DebugMode = imported.DebugMode;
-                
+
                 if (imported.Jobs != null)
                 {
                     CurrentSettings.Jobs = imported.Jobs;
                 }
 
-                // 3. Save and log
-                SaveConfiguration();
+                if (!SaveConfiguration())
+                {
+                    throw new IOException("The imported configuration could not be persisted.");
+                }
                 _logger.Success("Config", $"Successfully imported unified settings from {filePath}");
             }
             catch (Exception ex)

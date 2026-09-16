@@ -5,25 +5,27 @@ using ScheduledNwcExporter.Configuration;
 using ScheduledNwcExporter.Core;
 using ScheduledNwcExporter.Logging;
 using ScheduledNwcExporter.Revit;
+using ScheduledNwcExporter.Reliability;
 
 namespace ScheduledNwcExporter.Queue
 {
-    /// <summary>
-    /// Represents the final outcome of one export job.
-    /// </summary>
     public sealed class JobExecutionResult
     {
         public string ModelName { get; set; } = string.Empty;
         public bool Succeeded { get; set; }
         public bool Skipped { get; set; }
+        public bool SkippedExisting { get; set; }
         public bool Cancelled { get; set; }
+        public bool Retryable { get; set; }
+        public bool OutputWritten { get; set; }
+        public string OutputPath { get; set; } = string.Empty;
         public string ErrorMessage { get; set; } = string.Empty;
         public TimeSpan Duration { get; set; }
     }
 
     /// <summary>
-    /// Processes one model export at a time. The caller is responsible for invoking this class only
-    /// from a valid Revit API context, such as IExternalEventHandler.Execute.
+    /// Performs exactly one Revit-side attempt. Retry timing/orchestration belongs to the queue
+    /// handler so the Revit UI thread is never held inside Thread.Sleep between attempts.
     /// </summary>
     public sealed class JobProcessor
     {
@@ -50,11 +52,7 @@ namespace ScheduledNwcExporter.Queue
             _exportViewService = new ExportViewService(_logger);
         }
 
-        /// <summary>
-        /// Executes one export job, isolates failures, and always closes the programmatically opened document.
-        /// This method must never be invoked through Task.Run, a timer callback, or another background thread.
-        /// </summary>
-        public JobExecutionResult ProcessSingleJob(ModelExportJob job, Func<bool> isCancellationRequested, Action<string, string>? onProgress = null)
+        public JobExecutionResult ProcessSingleAttempt(ModelExportJob job, Func<bool> isCancellationRequested, int attemptNumber, Action<string, string>? onProgress = null)
         {
             if (job == null) throw new ArgumentNullException(nameof(job));
             if (isCancellationRequested == null) throw new ArgumentNullException(nameof(isCancellationRequested));
@@ -75,157 +73,147 @@ namespace ScheduledNwcExporter.Queue
             if (!job.IsEnabled)
             {
                 result.Skipped = true;
-                UpdateProgress(JobStatus.Skipped, "Skipped", 100);
-                _logger.Info("Job", "Disabled job skipped.", modelName, "Preflight");
-                return CompleteJob(job, result, startedAt, UpdateProgress);
+                result.ErrorMessage = "Job is disabled.";
+                return CompleteAttempt(result, startedAt);
             }
 
             if (isCloud && job.CloudOpenAccessDenied)
             {
                 result.Skipped = true;
-                result.ErrorMessage = "Cloud model is blocked after Revit previously denied access. Re-select the cloud model after an administrator grants Revit Cloud Worksharing entitlement and View + Download + Upload + Edit folder permissions.";
-                UpdateProgress(JobStatus.Skipped, "Cloud access blocked", 100);
-                _logger.Warning("Job", result.ErrorMessage, modelName, "CloudAccessPreflight");
-                return CompleteJob(job, result, startedAt, UpdateProgress);
+                result.ErrorMessage = "Cloud model is blocked after Revit previously denied access. Re-select the cloud model after an administrator grants the required access.";
+                result.Retryable = false;
+                return CompleteAttempt(result, startedAt);
             }
 
-            int maximumAttempts = Math.Max(1, job.RetryCount + 1);
-            string lastError = string.Empty;
-
-            for (int attempt = 1; attempt <= maximumAttempts; attempt++)
+            if (isCancellationRequested())
             {
+                result.Cancelled = true;
+                result.ErrorMessage = "Cancelled before beginning the next safe operation.";
+                return CompleteAttempt(result, startedAt);
+            }
+
+            Document? document = null;
+            PreparedModelSource? preparedModel = null;
+            try
+            {
+                UpdateProgress(JobStatus.Processing, $"Validating (attempt {attemptNumber})", 5);
+                ValidateJobInputs(job);
+                ValidateCloudSession(job);
+
+                ExportSettings exportSettings = job.CustomExportSettings ?? _settings.Export;
+                DateTime? sourceModifiedUtcAtExportStart = ExportStateStore.ResolveCurrentSourceModifiedUtc(job);
+                string cloudVersionIdAtExportStart = job.CloudVersionId ?? string.Empty;
+
+                UpdateProgress(JobStatus.Processing, "Preparing model", 10);
+                preparedModel = _temporaryModelCopyService.Prepare(
+                    job.SourceModelPath,
+                    exportSettings.UseTemporaryCopyWithoutRevitLinks,
+                    modelName);
+
+                UpdateProgress(JobStatus.Processing, "Opening model", 20);
+                document = _documentManager.OpenModelDetached(_application, preparedModel.OpenPath);
+                if (document == null)
+                    throw new InvalidOperationException("Revit could not open the source model as a detached document.");
+
+                UpdateProgress(JobStatus.Processing, "Verifying worksets", 40);
+                if (!_worksetManager.VerifyAllUserWorksetsOpen(document, modelName))
+                    throw new InvalidOperationException("One or more required user worksets were closed after the document opened.");
+
+                UpdateProgress(JobStatus.Processing, "Inspecting links", 50);
+                _linkManager.InspectAndLogRevitLinks(document, modelName);
+
                 if (isCancellationRequested())
                 {
                     result.Cancelled = true;
-                    result.ErrorMessage = "Cancelled before beginning the next safe operation.";
-                    _logger.Warning("Job", result.ErrorMessage, modelName, "Cancellation");
-                    break;
+                    result.ErrorMessage = "Cancelled before NWC export began.";
+                    return CompleteAttempt(result, startedAt);
                 }
 
-                if (attempt > 1)
+                UpdateProgress(JobStatus.Processing, "Preparing export view", 60);
+                ElementId? exportViewId = _exportViewService.GetOrCreateExportView(document, modelName);
+
+                UpdateProgress(JobStatus.Processing, "Exporting NWC", 70);
+                string outputFileName = ResolveFilenameTemplate(job.OutputFileNameTemplate, modelName);
+                NwcExportResult exportResult = _nwcExporter.ExportModelToNwc(
+                    document,
+                    job.OutputDirectory,
+                    outputFileName,
+                    exportSettings,
+                    exportViewId,
+                    modelName);
+
+                result.OutputPath = exportResult.OutputPath;
+
+                if (exportResult.Outcome == NwcExportOutcome.SkippedExisting)
                 {
-                    int delay = job.RetryDelaySeconds;
-                    _logger.Warning("Job", $"Retrying job (attempt {attempt} of {maximumAttempts}) in {delay}s.", modelName, "Retrying");
-                    UpdateProgress(JobStatus.Retrying, $"Waiting {delay}s to retry...", 0);
-                    
-                    // Wait for the specified delay, checking for cancellation
-                    for (int i = 0; i < delay; i++)
-                    {
-                        if (isCancellationRequested()) break;
-                        System.Threading.Thread.Sleep(1000);
-                    }
-                    
-                    if (isCancellationRequested())
-                    {
-                        result.Cancelled = true;
-                        result.ErrorMessage = "Cancelled during retry delay.";
-                        break;
-                    }
+                    result.Skipped = true;
+                    result.SkippedExisting = true;
+                    result.ErrorMessage = "Existing NWC retained because overwrite policy is Skip; freshness was not advanced.";
+                    result.Retryable = false;
+                    return CompleteAttempt(result, startedAt);
                 }
 
-                Document? document = null;
-                PreparedModelSource? preparedModel = null;
-                try
+                if (!exportResult.Succeeded || !exportResult.WroteOutput)
+                    throw new InvalidOperationException("The NWC exporter did not create a valid output file.");
+
+                result.Succeeded = true;
+                result.OutputWritten = true;
+                result.Retryable = false;
+
+                if (!ExportStateStore.TryRecordSuccessfulExport(
+                    job,
+                    _settings,
+                    exportResult.OutputPath,
+                    sourceModifiedUtcAtExportStart,
+                    cloudVersionIdAtExportStart,
+                    out string stateError))
                 {
-                    UpdateProgress(JobStatus.Processing, "Validating", 5);
-                    ValidateJobInputs(job);
-                    ValidateCloudSession(job);
-
-                    UpdateProgress(JobStatus.Processing, "Preparing model", 10);
-                    preparedModel = _temporaryModelCopyService.Prepare(
-                        job.SourceModelPath,
-                        _settings.Export.UseTemporaryCopyWithoutRevitLinks,
-                        modelName);
-
-                    UpdateProgress(JobStatus.Processing, "Opening model", 20);
-                    document = _documentManager.OpenModelDetached(_application, preparedModel.OpenPath);
-                    if (document == null)
-                    {
-                        throw new InvalidOperationException("Revit could not open the source model as a detached document.");
-                    }
-
-                    UpdateProgress(JobStatus.Processing, "Verifying worksets", 40);
-                    if (!_worksetManager.VerifyAllUserWorksetsOpen(document, modelName))
-                    {
-                        throw new InvalidOperationException("One or more required user worksets were closed after the document opened.");
-                    }
-
-                    UpdateProgress(JobStatus.Processing, "Inspecting links", 50);
-                    _linkManager.InspectAndLogRevitLinks(document, modelName);
-
-                    if (isCancellationRequested())
-                    {
-                        result.Cancelled = true;
-                        result.ErrorMessage = "Cancelled before NWC export began.";
-                        _logger.Warning("Job", result.ErrorMessage, modelName, "Cancellation");
-                        break;
-                    }
-
-                    UpdateProgress(JobStatus.Processing, "Preparing export view", 60);
-                    ElementId? exportViewId = _exportViewService.GetOrCreateExportView(document, modelName);
-
-                    UpdateProgress(JobStatus.Processing, "Exporting NWC", 70);
-                    string outputFileName = ResolveFilenameTemplate(job.OutputFileNameTemplate, modelName);
-                    
-                    // Use custom settings if provided, otherwise use global settings
-                    var exportSettings = job.CustomExportSettings ?? _settings.Export;
-                    
-                    if (!_nwcExporter.ExportModelToNwc(document, job.OutputDirectory, outputFileName, exportSettings, exportViewId, modelName))
-                    {
-                        throw new InvalidOperationException("The NWC exporter did not create a valid output file.");
-                    }
-
-                    result.Succeeded = true;
-                    break;
+                    result.ErrorMessage = "NWC exported successfully, but the verified freshness snapshot could not be saved: " + stateError;
+                    _logger.Warning("Freshness", result.ErrorMessage, modelName, "PersistingExportState");
                 }
-                catch (CloudModelAccessDeniedException ex)
-                {
-                    lastError = ex.Message;
-                    if (ex.IsPermanentAccessDenial)
-                    {
-                        job.CloudOpenAccessDenied = true;
-                        job.CloudOpenAccessDeniedAt = DateTime.Now;
-                        UpdateProgress(JobStatus.Failed, "Cloud access denied — no retry", 100);
-                        _logger.Error("Job", "Cloud model access was denied by Revit. The job has been blocked from future unattended attempts until the cloud model is re-selected.", modelName, "CloudAccessDenied", ex);
-                    }
-                    else
-                    {
-                        UpdateProgress(JobStatus.Failed, "Autodesk sign-in required", 100);
-                        _logger.Warning("Job", "Cloud preflight stopped this job because no Autodesk session token was available. Revit was not asked to open the model.", modelName, "CloudAccessPreflight", ex);
-                    }
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    lastError = ex.Message;
-                    _logger.Error("Job", $"Export attempt {attempt} failed: {ex.Message}", modelName, "Exporting", ex);
 
-                    if (ex is FileNotFoundException || ex is ArgumentException || ex is DirectoryNotFoundException)
-                    {
-                        break;
-                    }
-                }
-                finally
-                {
-                    if (document != null)
-                    {
-                        UpdateProgress(JobStatus.Processing, "Closing model", 95);
-                        _documentManager.CloseDocumentSafely(document);
-                    }
-
-                    preparedModel?.Dispose();
-                }
+                return CompleteAttempt(result, startedAt);
             }
-
-            result.ErrorMessage = result.Succeeded || result.Cancelled ? result.ErrorMessage : lastError;
-            return CompleteJob(job, result, startedAt, UpdateProgress);
+            catch (CloudModelAccessDeniedException ex)
+            {
+                result.ErrorMessage = ex.Message;
+                result.Retryable = false;
+                if (ex.IsPermanentAccessDenial)
+                {
+                    job.CloudOpenAccessDenied = true;
+                    job.CloudOpenAccessDeniedAt = DateTime.Now;
+                    _logger.Error("Job", "Cloud model access was denied by Revit. Future unattended attempts are blocked until the model is re-selected.", modelName, "CloudAccessDenied", ex);
+                }
+                else
+                {
+                    _logger.Warning("Job", "Cloud preflight stopped because no Autodesk session token was available.", modelName, "CloudAccessPreflight", ex);
+                }
+                return CompleteAttempt(result, startedAt);
+            }
+            catch (Exception ex)
+            {
+                result.ErrorMessage = ex.Message;
+                result.Retryable = !(ex is FileNotFoundException || ex is ArgumentException || ex is DirectoryNotFoundException);
+                _logger.Error("Job", $"Export attempt {attemptNumber} failed: {ex.Message}", modelName, "Exporting", ex);
+                return CompleteAttempt(result, startedAt);
+            }
+            finally
+            {
+                if (document != null)
+                {
+                    UpdateProgress(JobStatus.Processing, "Closing model", 95);
+                    _documentManager.CloseDocumentSafely(document);
+                }
+                preparedModel?.Dispose();
+            }
         }
 
-        private JobExecutionResult CompleteJob(ModelExportJob job, JobExecutionResult result, DateTime startedAt, Action<JobStatus, string, int>? updateProgress)
+        public JobExecutionResult FinalizeJob(ModelExportJob job, JobExecutionResult result, Action<string, string>? onProgress = null)
         {
-            result.Duration = DateTime.Now - startedAt;
-            job.LastRun = DateTime.Now;
+            if (job == null) throw new ArgumentNullException(nameof(job));
+            if (result == null) throw new ArgumentNullException(nameof(result));
 
+            job.LastRun = DateTime.Now;
             var runResult = new RunResult
             {
                 Timestamp = job.LastRun.Value,
@@ -233,25 +221,35 @@ namespace ScheduledNwcExporter.Queue
                 ErrorMessage = result.ErrorMessage
             };
 
+            void SetFinal(JobStatus status, string stage)
+            {
+                job.Status = status;
+                job.CurrentStage = stage;
+                job.ProgressPercentage = 100;
+                onProgress?.Invoke(result.ModelName, stage);
+            }
+
             if (result.Succeeded)
             {
-                updateProgress?.Invoke(JobStatus.Success, "Success", 100);
+                SetFinal(JobStatus.Success, "Success");
                 job.LastError = string.Empty;
                 runResult.Status = JobStatus.Success;
                 _logger.Success("Job", $"Job completed in {runResult.Duration}.", result.ModelName, "Completed");
             }
             else if (result.Cancelled)
             {
-                updateProgress?.Invoke(JobStatus.Cancelled, "Cancelled", 100);
+                SetFinal(JobStatus.Cancelled, "Cancelled");
                 job.LastError = result.ErrorMessage;
                 runResult.Status = JobStatus.Cancelled;
                 _logger.Warning("Job", "Job cancelled at a safe boundary.", result.ModelName, "Cancelled");
             }
             else if (result.Skipped)
             {
-                updateProgress?.Invoke(JobStatus.Skipped, string.IsNullOrWhiteSpace(result.ErrorMessage) ? "Skipped" : "Cloud access blocked", 100);
+                string stage = result.SkippedExisting ? "Existing output skipped" : "Skipped";
+                SetFinal(JobStatus.Skipped, stage);
                 job.LastError = result.ErrorMessage;
                 runResult.Status = JobStatus.Skipped;
+                _logger.Info("Job", result.ErrorMessage, result.ModelName, stage);
             }
             else
             {
@@ -260,7 +258,7 @@ namespace ScheduledNwcExporter.Queue
                     : result.ErrorMessage.IndexOf("session token", StringComparison.OrdinalIgnoreCase) >= 0
                         ? "Autodesk sign-in required"
                         : "Failed";
-                updateProgress?.Invoke(JobStatus.Failed, finalStage, 100);
+                SetFinal(JobStatus.Failed, finalStage);
                 job.LastError = result.ErrorMessage;
                 runResult.Status = JobStatus.Failed;
                 _logger.Error("Job", $"Job permanently failed. Reason: {result.ErrorMessage}", result.ModelName, "Failed");
@@ -270,13 +268,16 @@ namespace ScheduledNwcExporter.Queue
             return result;
         }
 
+        private static JobExecutionResult CompleteAttempt(JobExecutionResult result, DateTime startedAt)
+        {
+            result.Duration = DateTime.Now - startedAt;
+            return result;
+        }
+
         private static void ValidateCloudSession(ModelExportJob job)
         {
             if (!job.IsCloud) return;
 
-            // This preflight prevents Revit from entering its native cloud-open workflow when the
-            // Autodesk session itself is unavailable. Revit remains the authoritative check for the
-            // separate Cloud Worksharing entitlement and effective folder edit permissions.
             string token = CloudAuthenticationService.GetAccessToken();
             if (string.IsNullOrWhiteSpace(token))
             {
@@ -290,30 +291,20 @@ namespace ScheduledNwcExporter.Queue
         private static void ValidateJobInputs(ModelExportJob job)
         {
             if (string.IsNullOrWhiteSpace(job.SourceModelPath))
-            {
                 throw new ArgumentException("The source model path is empty.");
-            }
 
-            if (!job.SourceModelPath.ToLower().Contains(".rvt"))
-            {
+            if (!job.SourceModelPath.ToLowerInvariant().Contains(".rvt"))
                 throw new ArgumentException("The source model must have a .rvt extension.");
-            }
 
             bool isCloud = job.SourceModelPath.StartsWith("acc://", StringComparison.OrdinalIgnoreCase);
             if (!isCloud && !File.Exists(job.SourceModelPath))
-            {
                 throw new FileNotFoundException("Source model file was not found.", job.SourceModelPath);
-            }
 
             if (string.IsNullOrWhiteSpace(job.OutputDirectory))
-            {
                 throw new ArgumentException("The output directory is empty.");
-            }
 
             if (string.IsNullOrWhiteSpace(job.OutputFileNameTemplate))
-            {
                 throw new ArgumentException("The output filename template is empty.");
-            }
         }
 
         private static string ResolveFilenameTemplate(string template, string modelFileName)
@@ -332,9 +323,7 @@ namespace ScheduledNwcExporter.Queue
                 .Replace("{Minute}", now.ToString("mm"));
 
             foreach (char invalidCharacter in Path.GetInvalidFileNameChars())
-            {
                 resolved = resolved.Replace(invalidCharacter, '_');
-            }
 
             return resolved.EndsWith(".nwc", StringComparison.OrdinalIgnoreCase) ? resolved : resolved + ".nwc";
         }

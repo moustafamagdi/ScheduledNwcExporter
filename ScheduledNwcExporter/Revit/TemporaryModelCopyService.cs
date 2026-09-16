@@ -50,6 +50,7 @@ namespace ScheduledNwcExporter.Revit
     /// <summary>
     /// Creates an isolated local RVT copy whose top-level Revit links are marked unloaded through
     /// TransmissionData. The original RVT is only read and is never modified.
+    /// Copy failures bubble to the queue, which owns non-blocking retry timing.
     /// </summary>
     public sealed class TemporaryModelCopyService
     {
@@ -66,18 +67,16 @@ namespace ScheduledNwcExporter.Revit
 
             if (!disableRevitLinks || isCloud)
             {
-                string message = isCloud 
+                string message = isCloud
                     ? "Performance Mode (Local Copy) is not supported for cloud models. Opening the cloud model directly."
                     : "Performance Mode is disabled. Opening the original source model.";
-                
+
                 _logger.Info("PerformanceMode", message, modelName, "Preflight");
                 return new PreparedModelSource(sourceModelPath, sourceModelPath, null, _logger, 0);
             }
 
             if (!File.Exists(sourceModelPath))
-            {
                 throw new FileNotFoundException("Source model file was not found.", sourceModelPath);
-            }
 
             string temporaryDirectory = Path.Combine(
                 Path.GetTempPath(),
@@ -88,30 +87,17 @@ namespace ScheduledNwcExporter.Revit
             Directory.CreateDirectory(temporaryDirectory);
 
             string temporaryModelPath = Path.Combine(temporaryDirectory, Path.GetFileName(sourceModelPath));
-            
-            // AUDIT FIX: Implement retry logic for copying live central models that might be momentarily locked
-            const int maxRetries = 3;
-            const int delayMs = 2000;
 
-            for (int i = 1; i <= maxRetries; i++)
+            try
             {
-                try
-                {
-                    _logger.Info("PerformanceMode", $"Creating temporary copy (Attempt {i}/{maxRetries}): {modelName}", modelName, "PreparingTemporaryCopy");
-                    File.Copy(sourceModelPath, temporaryModelPath, true);
-                    break;
-                }
-                catch (IOException) when (i < maxRetries)
-                {
-                    _logger.Warning("PerformanceMode", $"Model file is currently locked by another process. Retrying in {delayMs/1000}s...", modelName, "PreparingTemporaryCopy");
-                    System.Threading.Thread.Sleep(delayMs);
-                }
-                catch (Exception ex)
-                {
-                    TryDeleteTemporaryDirectory(temporaryDirectory, modelName);
-                    _logger.Error("PerformanceMode", $"Failed to create temporary copy: {ex.Message}", modelName, "PreparingTemporaryCopy", ex);
-                    throw;
-                }
+                _logger.Info("PerformanceMode", $"Creating temporary copy: {modelName}", modelName, "PreparingTemporaryCopy");
+                File.Copy(sourceModelPath, temporaryModelPath, true);
+            }
+            catch (Exception ex)
+            {
+                TryDeleteTemporaryDirectory(temporaryDirectory, modelName);
+                _logger.Error("PerformanceMode", $"Failed to create temporary copy: {ex.Message}", modelName, "PreparingTemporaryCopy", ex);
+                throw;
             }
 
             try
@@ -163,7 +149,6 @@ namespace ScheduledNwcExporter.Revit
                     }
                 }
 
-                // Revit only honors desired external reference states on a transmitted model.
                 transmissionData.IsTransmitted = true;
                 TransmissionData.WriteTransmissionData(modelPath, transmissionData);
                 return disabledCount;
@@ -175,9 +160,7 @@ namespace ScheduledNwcExporter.Revit
             try
             {
                 if (Directory.Exists(temporaryDirectory))
-                {
                     Directory.Delete(temporaryDirectory, true);
-                }
             }
             catch (Exception cleanupException)
             {
