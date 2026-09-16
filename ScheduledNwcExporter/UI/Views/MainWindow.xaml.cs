@@ -27,8 +27,6 @@ namespace ScheduledNwcExporter.UI.Views
         private readonly MainViewModel _viewModel;
         private readonly ILogger _logger;
         private ListSortDirection? _freshnessSortDirection;
-        private bool _initialFreshnessSelectionPending = true;
-        private bool _needsExportButtonAdded;
 
         public MainWindow()
         {
@@ -40,22 +38,13 @@ namespace ScheduledNwcExporter.UI.Views
                 _exportQueueHandler = App.QueueHandler ?? throw new InvalidOperationException("Queue handler not initialized.");
                 _exportQueueEvent = App.QueueEvent ?? throw new InvalidOperationException("External event not initialized.");
 
-                this.Dispatcher.UnhandledException += Dispatcher_UnhandledException;
+                Dispatcher.UnhandledException += Dispatcher_UnhandledException;
 
-                _viewModel = new MainViewModel(App.ConfigManager ?? new ConfigurationManager(), _logger, _exportQueueHandler, App.Scheduler);
+                _viewModel = new MainViewModel(App.ConfigManager ?? new ConfigurationManager(_logger), _logger, _exportQueueHandler, App.Scheduler);
                 DataContext = _viewModel;
                 Closed += MainWindow_Closed;
 
                 RegisterSafeEventHandlers();
-                Loaded += MainWindow_Loaded;
-
-                _viewModel.PropertyChanged += ViewModel_PropertyChanged;
-                SelectNeedsExportModels(false);
-                if (!_viewModel.IsRefreshingModelDates)
-                {
-                    SelectNeedsExportModels(true);
-                    _initialFreshnessSelectionPending = false;
-                }
             }
             catch (Exception ex)
             {
@@ -67,86 +56,6 @@ namespace ScheduledNwcExporter.UI.Views
             }
         }
 
-        private void MainWindow_Loaded(object sender, RoutedEventArgs e)
-        {
-            // WPF's visual tree is guaranteed to exist here. Adding the button in the constructor
-            // could run too early, which made the action invisible even though its logic existed.
-            AddSelectNeedsExportButton();
-        }
-
-        private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
-        {
-            if (_initialFreshnessSelectionPending &&
-                e.PropertyName == nameof(MainViewModel.IsRefreshingModelDates) &&
-                !_viewModel.IsRefreshingModelDates)
-            {
-                SelectNeedsExportModels(true);
-                _initialFreshnessSelectionPending = false;
-            }
-        }
-
-        private void AddSelectNeedsExportButton()
-        {
-            if (_needsExportButtonAdded) return;
-
-            Button? refreshButton = FindButtonByContent(this, "↻ Refresh Dates");
-            if (refreshButton?.Parent is Panel toolbar)
-            {
-                var button = new Button
-                {
-                    Content = " ✓ Needs Export ",
-                    Width = 110,
-                    Height = 28,
-                    Margin = new Thickness(0, 0, 8, 0),
-                    ToolTip = "Enable only models whose NWC is not confirmed current; disable models that are already fresh."
-                };
-                button.Click += (_, __) => SelectNeedsExportModels(true);
-
-                int index = toolbar.Children.IndexOf(refreshButton);
-                toolbar.Children.Insert(Math.Min(index + 1, toolbar.Children.Count), button);
-                _needsExportButtonAdded = true;
-            }
-            else
-            {
-                _logger?.Warning("UI", "Could not locate the queue toolbar to add the Needs Export button.", string.Empty, "FreshnessSelection");
-            }
-        }
-
-        private static Button? FindButtonByContent(DependencyObject root, string contentText)
-        {
-            int count = VisualTreeHelper.GetChildrenCount(root);
-            for (int i = 0; i < count; i++)
-            {
-                DependencyObject child = VisualTreeHelper.GetChild(root, i);
-                if (child is Button button && string.Equals(button.Content?.ToString()?.Trim(), contentText.Trim(), StringComparison.Ordinal))
-                    return button;
-
-                Button? nested = FindButtonByContent(child, contentText);
-                if (nested != null) return nested;
-            }
-            return null;
-        }
-
-        private void SelectNeedsExportModels(bool saveConfiguration)
-        {
-            int enabled = 0;
-            foreach (ModelExportJob job in _viewModel.Jobs)
-            {
-                bool isConfirmedFresh = job.LastSuccessfulExportUtc.HasValue &&
-                                        job.ExportLag.HasValue &&
-                                        job.ExportLag.Value.TotalMinutes <= 0;
-                job.IsEnabled = !isConfirmedFresh;
-                if (job.IsEnabled) enabled++;
-            }
-
-            if (saveConfiguration)
-            {
-                App.ConfigManager?.SaveConfiguration();
-            }
-
-            _logger?.Info("UI", $"Smart selection enabled {enabled} of {_viewModel.Jobs.Count} model(s) that need export or have unverified freshness.", string.Empty, "FreshnessSelection");
-        }
-
         private void Dispatcher_UnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
         {
             _logger?.Error("UI", $"Unhandled exception caught: {e.Exception.Message}", string.Empty, "Dispatcher", e.Exception);
@@ -156,32 +65,40 @@ namespace ScheduledNwcExporter.UI.Views
 
         private void RegisterSafeEventHandlers()
         {
+            // Single-click and bulk toggling operate on the transient run selection only.
+            // Persistent job eligibility (IsEnabled) is never changed implicitly by queue selection.
             QueueDataGrid.PreviewMouseLeftButtonDown += (s, e) =>
             {
                 try
                 {
                     var dep = e.OriginalSource as DependencyObject;
                     while (dep != null && !(dep is DataGridCell) && !(dep is DataGridColumnHeader))
-                    {
                         dep = VisualTreeHelper.GetParent(dep);
-                    }
 
-                    if (dep is DataGridCell cell && cell.Column is DataGridCheckBoxColumn)
+                    if (dep is DataGridCell cell && cell.Column is DataGridCheckBoxColumn && cell.DataContext is ModelExportJob job)
                     {
-                        if (cell.DataContext is ModelExportJob job)
+                        if (!job.IsEnabled)
                         {
-                            bool newState = !job.IsEnabled;
-                            if (QueueDataGrid.SelectedItems.Count > 1 && QueueDataGrid.SelectedItems.Contains(job))
-                            {
-                                var selectedJobs = QueueDataGrid.SelectedItems.Cast<object>().OfType<ModelExportJob>().ToList();
-                                foreach (var selectedJob in selectedJobs) selectedJob.IsEnabled = newState;
-                            }
-                            else
-                            {
-                                job.IsEnabled = newState;
-                            }
                             e.Handled = true;
+                            return;
                         }
+
+                        bool newState = !job.IsSelectedForRun;
+                        if (QueueDataGrid.SelectedItems.Count > 1 && QueueDataGrid.SelectedItems.Contains(job))
+                        {
+                            var selectedJobs = QueueDataGrid.SelectedItems.Cast<object>()
+                                .OfType<ModelExportJob>()
+                                .Where(selectedJob => selectedJob.IsEnabled)
+                                .ToList();
+                            foreach (var selectedJob in selectedJobs)
+                                selectedJob.IsSelectedForRun = newState;
+                        }
+                        else
+                        {
+                            job.IsSelectedForRun = newState;
+                        }
+
+                        e.Handled = true;
                     }
                 }
                 catch (Exception ex)
@@ -196,11 +113,16 @@ namespace ScheduledNwcExporter.UI.Views
                 {
                     if (e.Key == System.Windows.Input.Key.Space && QueueDataGrid.SelectedItems.Count > 0)
                     {
-                        var selectedJobs = QueueDataGrid.SelectedItems.Cast<object>().OfType<ModelExportJob>().ToList();
+                        var selectedJobs = QueueDataGrid.SelectedItems.Cast<object>()
+                            .OfType<ModelExportJob>()
+                            .Where(job => job.IsEnabled)
+                            .ToList();
+
                         if (selectedJobs.Any())
                         {
-                            bool newState = !selectedJobs.First().IsEnabled;
-                            foreach (var job in selectedJobs) job.IsEnabled = newState;
+                            bool newState = !selectedJobs.First().IsSelectedForRun;
+                            foreach (var job in selectedJobs)
+                                job.IsSelectedForRun = newState;
                             e.Handled = true;
                         }
                     }
@@ -259,8 +181,7 @@ namespace ScheduledNwcExporter.UI.Views
         {
             try
             {
-                Loaded -= MainWindow_Loaded;
-                _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
+                Dispatcher.UnhandledException -= Dispatcher_UnhandledException;
                 _viewModel?.Shutdown();
             }
             catch { }
