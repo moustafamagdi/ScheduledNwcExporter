@@ -141,11 +141,13 @@ namespace ScheduledNwcExporter.Reliability
 
         internal static DateTime? ResolveCurrentSourceModifiedUtc(ModelExportJob job)
         {
-            if (job.LastSourceModifiedUtc.HasValue)
-                return NormalizeUtc(job.LastSourceModifiedUtc.Value);
-
+            // Local files are cheap to inspect and may change while the manager window is closed,
+            // so always prefer the live filesystem timestamp over cached UI metadata.
             if (!job.IsCloud && !string.IsNullOrWhiteSpace(job.SourceModelPath) && File.Exists(job.SourceModelPath))
                 return File.GetLastWriteTimeUtc(job.SourceModelPath);
+
+            if (job.LastSourceModifiedUtc.HasValue)
+                return NormalizeUtc(job.LastSourceModifiedUtc.Value);
 
             return null;
         }
@@ -171,6 +173,16 @@ namespace ScheduledNwcExporter.Reliability
 
             if (string.IsNullOrWhiteSpace(record.OutputPath) || !File.Exists(record.OutputPath))
                 return NeedsExport("The last verified NWC output no longer exists.");
+
+            try
+            {
+                if (new FileInfo(record.OutputPath).Length <= 0)
+                    return NeedsExport("The last verified NWC output is empty.");
+            }
+            catch
+            {
+                return NeedsExport("The last verified NWC output cannot be verified.");
+            }
 
             ExportSettings effectiveSettings = job.CustomExportSettings ?? appSettings.Export;
             string currentFingerprint = ExportFingerprintService.Compute(effectiveSettings);
