@@ -8,24 +8,29 @@ using ScheduledNwcExporter.Logging;
 namespace ScheduledNwcExporter.Operations
 {
     /// <summary>
-    /// Lightweight schema marker/migration layer that runs before ConfigurationManager deserializes
-    /// the user's settings. Unknown JSON properties are intentionally tolerated by the existing
-    /// configuration model, so the schema version can be introduced without breaking older builds.
+    /// Lightweight schema migration layer that runs before ConfigurationManager deserializes settings.
+    /// A sidecar version marker remains authoritative because older ConfigurationManager builds may
+    /// rewrite config.json without preserving unknown JSON properties.
     /// </summary>
     public static class ConfigurationSchemaService
     {
         public const int CurrentVersion = 2;
 
-        public static string ConfigPath { get; } = Path.Combine(
+        private static readonly string RootDirectory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "MoustafaMagdi",
-            "ScheduledNwcExporter",
-            "config.json");
+            "ScheduledNwcExporter");
+
+        public static string ConfigPath { get; } = Path.Combine(RootDirectory, "config.json");
+        public static string VersionFilePath { get; } = Path.Combine(RootDirectory, "config.version");
 
         public static int ReadVersion()
         {
             try
             {
+                if (File.Exists(VersionFilePath) && int.TryParse(File.ReadAllText(VersionFilePath).Trim(), out int sidecarVersion))
+                    return sidecarVersion;
+
                 if (!File.Exists(ConfigPath)) return 0;
                 JObject root = JObject.Parse(File.ReadAllText(ConfigPath));
                 return root.Value<int?>("ConfigVersion") ?? 0;
@@ -40,30 +45,33 @@ namespace ScheduledNwcExporter.Operations
         {
             try
             {
-                if (!File.Exists(ConfigPath)) return;
+                Directory.CreateDirectory(RootDirectory);
+                int version = ReadVersion();
 
-                JObject root = JObject.Parse(File.ReadAllText(ConfigPath));
-                int version = root.Value<int?>("ConfigVersion") ?? 0;
-                if (version >= CurrentVersion) return;
-
-                if (version < 1)
+                if (File.Exists(ConfigPath) && version < CurrentVersion)
                 {
-                    // Normalize missing collections so older/hand-edited files deserialize safely.
-                    if (root["Jobs"] == null || root["Jobs"]!.Type == JTokenType.Null)
-                        root["Jobs"] = new JArray();
-                    if (root["Scheduler"] is JObject scheduler && (scheduler["Slots"] == null || scheduler["Slots"]!.Type == JTokenType.Null))
-                        scheduler["Slots"] = new JArray();
+                    JObject root = JObject.Parse(File.ReadAllText(ConfigPath));
+
+                    if (version < 1)
+                    {
+                        if (root["Jobs"] == null || root["Jobs"]!.Type == JTokenType.Null)
+                            root["Jobs"] = new JArray();
+                        if (root["Scheduler"] is JObject scheduler && (scheduler["Slots"] == null || scheduler["Slots"]!.Type == JTokenType.Null))
+                            scheduler["Slots"] = new JArray();
+                    }
+
+                    if (version < 2)
+                    {
+                        // Phase 2 history, reports and log correlation live in sidecar operational
+                        // stores, so no destructive transformation of user jobs/settings is required.
+                    }
+
+                    root["ConfigVersion"] = CurrentVersion;
+                    AtomicWriteConfig(root.ToString(Formatting.Indented));
+                    logger.Info("Config", $"Configuration schema migrated from v{version} to v{CurrentVersion}.");
                 }
 
-                if (version < 2)
-                {
-                    // Phase 2 introduces operational/session sidecars rather than embedding transient
-                    // history into config.json. No destructive data transformation is required.
-                }
-
-                root["ConfigVersion"] = CurrentVersion;
-                AtomicWrite(root.ToString(Formatting.Indented));
-                logger.Info("Config", $"Configuration schema migrated from v{version} to v{CurrentVersion}.");
+                WriteVersionMarker(CurrentVersion);
             }
             catch (Exception ex)
             {
@@ -75,11 +83,16 @@ namespace ScheduledNwcExporter.Operations
         {
             try
             {
+                Directory.CreateDirectory(RootDirectory);
+                WriteVersionMarker(CurrentVersion);
+
                 if (!File.Exists(ConfigPath)) return;
                 JObject root = JObject.Parse(File.ReadAllText(ConfigPath));
-                if ((root.Value<int?>("ConfigVersion") ?? 0) == CurrentVersion) return;
-                root["ConfigVersion"] = CurrentVersion;
-                AtomicWrite(root.ToString(Formatting.Indented));
+                if ((root.Value<int?>("ConfigVersion") ?? 0) != CurrentVersion)
+                {
+                    root["ConfigVersion"] = CurrentVersion;
+                    AtomicWriteConfig(root.ToString(Formatting.Indented));
+                }
             }
             catch (Exception ex)
             {
@@ -87,10 +100,17 @@ namespace ScheduledNwcExporter.Operations
             }
         }
 
-        private static void AtomicWrite(string json)
+        private static void WriteVersionMarker(int version)
         {
-            string directory = Path.GetDirectoryName(ConfigPath) ?? string.Empty;
-            Directory.CreateDirectory(directory);
+            string tempPath = VersionFilePath + ".tmp";
+            File.WriteAllText(tempPath, version.ToString(), new UTF8Encoding(false));
+            if (File.Exists(VersionFilePath)) File.Delete(VersionFilePath);
+            File.Move(tempPath, VersionFilePath);
+        }
+
+        private static void AtomicWriteConfig(string json)
+        {
+            Directory.CreateDirectory(RootDirectory);
             string tempPath = ConfigPath + ".schema.tmp";
             string backupPath = ConfigPath + ".schema.bak";
 
