@@ -16,14 +16,15 @@ namespace ScheduledNwcExporter.Application
         private static readonly Dictionary<string, int> DialogResultById =
             new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
             {
-                // Intentionally conservative. Add exact DialogId -> result mappings only after
-                // observing and validating the dialog in the target Revit version.
+                // Add exact DialogId -> result mappings only after observing and validating the
+                // dialog in the target Revit version.
             };
 
         private static readonly HashSet<Guid> DetachReferenceFailureIds = new HashSet<Guid>
         {
-            // Populate with verified FailureDefinitionId GUIDs as they are observed in production.
-            // Until then, the narrow description fallback below remains active.
+            // Additional verified FailureDefinitionId GUIDs can be registered here as they are
+            // observed in production. Known Autodesk built-ins should preferably be matched by
+            // their strongly typed BuiltInFailures property below.
         };
 
         public static int? ResolveDialogResult(DialogBoxShowingEventArgs args, string message)
@@ -80,16 +81,26 @@ namespace ScheduledNwcExporter.Application
             try
             {
                 FailureDefinitionId definitionId = failure.GetFailureDefinitionId();
-                if (definitionId != null && DetachReferenceFailureIds.Contains(definitionId.Guid))
+                if (definitionId != null)
                 {
-                    policyMatch = "FailureDefinitionId:" + definitionId.Guid;
-                    return true;
+                    // This is the exact built-in failure shown by Revit as:
+                    // "The References of the highlighted Dimension are no longer parallel."
+                    if (definitionId.Equals(BuiltInFailures.DimensionFailures.LinearConstraintNotParallel))
+                    {
+                        policyMatch = "BuiltInFailures.DimensionFailures.LinearConstraintNotParallel";
+                        return true;
+                    }
+
+                    if (DetachReferenceFailureIds.Contains(definitionId.Guid))
+                    {
+                        policyMatch = "FailureDefinitionId:" + definitionId.Guid;
+                        return true;
+                    }
                 }
             }
             catch
             {
-                // Some failure accessors may not expose a usable definition ID. Fall back to the
-                // same narrow description classification used before the registry was introduced.
+                // Fall back to the narrow text classifier when an accessor cannot expose an ID.
             }
 
             string description = failure.GetDescriptionText() ?? string.Empty;
