@@ -52,7 +52,13 @@ namespace ScheduledNwcExporter.Reliability
             }
         }
 
-        public static bool TryRecordSuccessfulExport(ModelExportJob job, AppSettings appSettings, string outputPath, out string error)
+        public static bool TryRecordSuccessfulExport(
+            ModelExportJob job,
+            AppSettings appSettings,
+            string outputPath,
+            DateTime? sourceModifiedUtcAtExportStart,
+            string cloudVersionIdAtExportStart,
+            out string error)
         {
             error = string.Empty;
             try
@@ -61,15 +67,16 @@ namespace ScheduledNwcExporter.Reliability
                 if (appSettings == null) throw new ArgumentNullException(nameof(appSettings));
                 if (string.IsNullOrWhiteSpace(job.Id)) throw new InvalidOperationException("The export job has no persistent ID.");
 
-                DateTime? sourceModifiedUtc = ResolveCurrentSourceModifiedUtc(job);
                 ExportSettings effectiveSettings = job.CustomExportSettings ?? appSettings.Export;
-
                 var record = new ExportStateRecord
                 {
                     JobId = job.Id,
                     ExportedAtUtc = DateTime.UtcNow,
-                    SourceModifiedUtc = sourceModifiedUtc,
-                    CloudVersionId = job.CloudVersionId ?? string.Empty,
+                    // Record exactly what was known before Revit opened/exported the model. If a
+                    // local RVT changes during the export, the next evaluator pass sees the newer
+                    // filesystem timestamp and correctly keeps the job stale.
+                    SourceModifiedUtc = sourceModifiedUtcAtExportStart,
+                    CloudVersionId = cloudVersionIdAtExportStart ?? string.Empty,
                     ExportFingerprint = ExportFingerprintService.Compute(job, effectiveSettings),
                     OutputPath = outputPath ?? string.Empty
                 };
