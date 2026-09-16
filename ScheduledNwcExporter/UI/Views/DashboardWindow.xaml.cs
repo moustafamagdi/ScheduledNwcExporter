@@ -35,6 +35,7 @@ namespace ScheduledNwcExporter.UI.Views
             var recent = SessionHistoryService.GetRecent(30);
             var durations = recent
                 .SelectMany(session => session.Jobs)
+                .Where(job => string.Equals(job.Status, "Success", StringComparison.OrdinalIgnoreCase))
                 .Select(job => TimeSpan.TryParse(job.Duration, out TimeSpan duration) ? (TimeSpan?)duration : null)
                 .Where(duration => duration.HasValue)
                 .Select(duration => duration.Value)
@@ -52,21 +53,20 @@ namespace ScheduledNwcExporter.UI.Views
                 AverageTimeText.Text = "—";
             }
 
-            SessionHistoryRecord latest = SessionHistoryService.GetLatest();
+            SessionHistoryRecord? latest = SessionHistoryService.GetLatest();
             LastBatchText.Text = latest == null
                 ? "No recorded batch yet."
                 : $"{latest.StartedDisplay} · {latest.TriggerSource}\n{latest.ResultDisplay} · {latest.Duration}";
 
-            SessionHistoryRecord scheduled = SessionHistoryService.GetLatestScheduled();
+            SessionHistoryRecord? scheduled = SessionHistoryService.GetLatestScheduled();
             LastScheduledText.Text = scheduled == null
                 ? "No scheduled batch recorded yet."
                 : $"{scheduled.StartedDisplay}\n{scheduled.ResultDisplay} · {scheduled.Duration}";
 
             var builder = new StringBuilder();
             foreach (SessionHistoryRecord session in recent.Take(5))
-            {
                 builder.AppendLine($"{session.StartedDisplay} · {session.TriggerSource} · {session.ResultDisplay} · {session.Duration}");
-            }
+
             RecentActivityText.Text = builder.Length > 0 ? builder.ToString().TrimEnd() : "No recent activity recorded.";
         }
 
