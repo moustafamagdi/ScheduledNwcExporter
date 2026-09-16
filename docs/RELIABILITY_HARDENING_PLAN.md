@@ -27,16 +27,17 @@ Validation gate:
 - [x] Record a snapshot only after a non-empty NWC is actually written.
 - [x] Compare local RVTs using the live source-file modification timestamp.
 - [x] Compare ACC jobs using the latest known tip version ID where available.
-- [x] Include export settings and export-scope policy in a SHA-256 fingerprint.
+- [x] Include source identity, output target/template, export settings, and export-scope policy in a SHA-256 fingerprint.
 - [x] Verify that the recorded NWC still exists and is non-empty.
 - [x] Refresh ACC metadata before a scheduled run when the manager window is closed.
 - [x] Treat failed/unavailable ACC metadata as unverified rather than Current.
+- [x] Keep a successfully written NWC as a successful export even if the auxiliary freshness snapshot cannot be persisted; log the state-write problem and remain conservative on the next run.
 
 Migration behavior:
 - Existing jobs from older builds have no verified export snapshot. They are intentionally classified as `Needs Export` until one successful export is performed by the hardening build.
 
 Validation gate:
-- Modifying the RVT, ACC tip version, relevant export settings, export-scope revision, or deleting the NWC must make the job require export.
+- Modifying the RVT, ACC tip version, source identity, output folder/template, relevant export settings, export-scope revision, or deleting/emptying the NWC must make the job require export.
 - An unchanged source/settings/output combination must become Current after a verified export.
 
 ### 3. Non-blocking retry orchestration
@@ -56,6 +57,7 @@ Validation gate:
 
 - [x] Add a single unattended policy registry.
 - [x] Evaluate exact Dialog IDs and Failure Definition IDs before text fallbacks.
+- [x] Register the known dimension case as `BuiltInFailures.DimensionFailures.LinearConstraintNotParallel`.
 - [x] Keep unknown dialogs untouched and logged.
 - [x] Retain the narrow `DetachElements` / Remove Reference rule only when Revit explicitly exposes that resolution.
 - [x] Log Failure Definition IDs so verified production cases can be promoted into the ID registry later.
@@ -88,12 +90,13 @@ Validation gate:
 3. Run at least one local RVT through a successful export, then confirm it becomes Current.
 4. Modify the RVT and confirm it becomes Needs Export automatically.
 5. Change a fingerprinted export setting and confirm the job becomes Needs Export even if the RVT did not change.
-6. Test `OverwritePolicy = Skip` against a stale job and confirm it does not become Current.
-7. Force a retryable failure and confirm Revit remains responsive during the delay.
-8. Test the known broken-dimension Remove Reference model.
-9. Test project-level CAD exclusion and preservation of CAD nested inside a family.
-10. Test ACC freshness with a new model version if cloud access is available.
-11. Test scheduler with one modern slot and confirm the legacy time does not trigger separately.
+6. Change the output folder/template and confirm the job becomes Needs Export.
+7. Test `OverwritePolicy = Skip` against a stale job and confirm it does not become Current.
+8. Force a retryable failure and confirm Revit remains responsive during the delay.
+9. Test the known broken-dimension Remove Reference model.
+10. Test project-level CAD exclusion and preservation of CAD nested inside a family.
+11. Test ACC freshness with a new model version if cloud access is available.
+12. Test scheduler with one modern slot and confirm the legacy time does not trigger separately.
 
 ## Deferred Phase 2 — only after Phase 1 validation
 
