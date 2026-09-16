@@ -101,6 +101,8 @@ namespace ScheduledNwcExporter.Queue
                 ValidateCloudSession(job);
 
                 ExportSettings exportSettings = job.CustomExportSettings ?? _settings.Export;
+                DateTime? sourceModifiedUtcAtExportStart = ExportStateStore.ResolveCurrentSourceModifiedUtc(job);
+                string cloudVersionIdAtExportStart = job.CloudVersionId ?? string.Empty;
 
                 UpdateProgress(JobStatus.Processing, "Preparing model", 10);
                 preparedModel = _temporaryModelCopyService.Prepare(
@@ -158,9 +160,13 @@ namespace ScheduledNwcExporter.Queue
                 result.OutputWritten = true;
                 result.Retryable = false;
 
-                // A failure to persist the auxiliary freshness snapshot must not convert a valid
-                // NWC into an export failure. The job remains conservatively Needs Export next time.
-                if (!ExportStateStore.TryRecordSuccessfulExport(job, _settings, exportResult.OutputPath, out string stateError))
+                if (!ExportStateStore.TryRecordSuccessfulExport(
+                    job,
+                    _settings,
+                    exportResult.OutputPath,
+                    sourceModifiedUtcAtExportStart,
+                    cloudVersionIdAtExportStart,
+                    out string stateError))
                 {
                     result.ErrorMessage = "NWC exported successfully, but the verified freshness snapshot could not be saved: " + stateError;
                     _logger.Warning("Freshness", result.ErrorMessage, modelName, "PersistingExportState");
