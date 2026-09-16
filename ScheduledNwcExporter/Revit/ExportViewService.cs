@@ -25,7 +25,6 @@ namespace ScheduledNwcExporter.Revit
         {
             try
             {
-                // 1. Search for an existing 3D view with our export name
                 View3D? exportView = null;
                 var collector = new FilteredElementCollector(doc).OfClass(typeof(View3D));
                 foreach (View3D view in collector)
@@ -37,7 +36,6 @@ namespace ScheduledNwcExporter.Revit
                     }
                 }
 
-                // 2. If not found, create a new 3D isometric view
                 if (exportView == null)
                 {
                     ElementId viewFamilyTypeId = GetThreeDimensionalViewFamilyTypeId(doc);
@@ -65,7 +63,6 @@ namespace ScheduledNwcExporter.Revit
                     return null;
                 }
 
-                // 3. Configure view visibility inside a transaction
                 using (var t = new Transaction(doc, "Configure NWC Export 3D View"))
                 {
                     t.Start();
@@ -76,10 +73,8 @@ namespace ScheduledNwcExporter.Revit
                     }
                     catch
                     {
-                        // Ignore if unsupported in specific templates
                     }
 
-                    // Turn off Section Box if active so the entire model geometry is included
                     try
                     {
                         if (exportView.IsSectionBoxActive)
@@ -89,21 +84,16 @@ namespace ScheduledNwcExporter.Revit
                     }
                     catch
                     {
-                        // Ignore
                     }
 
-                    // Hide Levels and Grids categories
                     HideCategory(doc, exportView, BuiltInCategory.OST_Levels, modelName);
                     HideCategory(doc, exportView, BuiltInCategory.OST_Grids, modelName);
 
-                    // Exclude all CAD ImportInstance elements that exist directly in the project,
-                    // including linked DWG/DXF/DGN/SAT-style instances. We hide element instances,
-                    // not OST_ImportObjectStyles, because hiding the whole category would also hide
-                    // imported CAD geometry nested inside families. ImportInstance elements that live
-                    // inside a family document are not project-document instances and therefore remain.
+                    // Hide project-level ImportInstance elements only. This covers imported and linked CAD
+                    // without hiding the Import Object Styles category, so CAD geometry nested in families
+                    // remains available to the NWC exporter.
                     HideProjectCadInstances(doc, exportView, modelName);
 
-                    // Ensure all user worksets are visible in this view
                     if (doc.IsWorkshared)
                     {
                         var worksets = new FilteredWorksetCollector(doc).OfKind(WorksetKind.UserWorkset);
@@ -137,21 +127,24 @@ namespace ScheduledNwcExporter.Revit
         {
             try
             {
-                List<ElementId> cadIds = new FilteredElementCollector(doc)
+                List<ImportInstance> cadInstances = new FilteredElementCollector(doc)
                     .OfClass(typeof(ImportInstance))
                     .WhereElementIsNotElementType()
                     .Cast<ImportInstance>()
-                    .Select(instance => instance.Id)
-                    .Where(id => id != ElementId.InvalidElementId)
                     .ToList();
 
-                if (cadIds.Count == 0)
+                if (cadInstances.Count == 0)
                 {
                     _logger.Debug("ViewService", "No project-level CAD imports or CAD links found to hide.", modelName, "ExportView");
                     return;
                 }
 
-                var hideableIds = cadIds.Where(id => view.CanElementBeHidden(id)).ToList();
+                // Revit 2024 exposes the hideability check on Element, not on View.
+                List<ElementId> hideableIds = cadInstances
+                    .Where(instance => instance.Id != ElementId.InvalidElementId && instance.CanBeHidden(view))
+                    .Select(instance => instance.Id)
+                    .ToList();
+
                 if (hideableIds.Count > 0)
                 {
                     view.HideElements(hideableIds);
