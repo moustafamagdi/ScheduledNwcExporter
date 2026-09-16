@@ -6,6 +6,21 @@ using ScheduledNwcExporter.Logging;
 
 namespace ScheduledNwcExporter.Revit
 {
+    public enum NwcExportOutcome
+    {
+        Exported,
+        SkippedExisting,
+        Failed
+    }
+
+    public sealed class NwcExportResult
+    {
+        public NwcExportOutcome Outcome { get; set; }
+        public string OutputPath { get; set; } = string.Empty;
+        public bool Succeeded => Outcome != NwcExportOutcome.Failed;
+        public bool WroteOutput => Outcome == NwcExportOutcome.Exported;
+    }
+
     /// <summary>
     /// Performs NWC exports through Revit's optional Navisworks exporter.
     /// </summary>
@@ -33,11 +48,7 @@ namespace ScheduledNwcExporter.Revit
             }
         }
 
-        /// <summary>
-        /// Exports the supplied document to NWC using a dedicated 3D view where all worksets and elements are visible
-        /// and Levels and Grids are hidden.
-        /// </summary>
-        public bool ExportModelToNwc(Document doc, string outputDirectory, string outputFileName, ExportSettings settings, ElementId? exportViewId, string modelName)
+        public NwcExportResult ExportModelToNwc(Document doc, string outputDirectory, string outputFileName, ExportSettings settings, ElementId? exportViewId, string modelName)
         {
             try
             {
@@ -52,8 +63,12 @@ namespace ScheduledNwcExporter.Revit
                 {
                     if (string.Equals(settings.OverwritePolicy, "Skip", StringComparison.OrdinalIgnoreCase))
                     {
-                        _logger.Info("Export", "Output file already exists and overwrite policy is Skip. Export will not run.", modelName, "Exporting");
-                        return true;
+                        _logger.Info("Export", "Output file already exists and overwrite policy is Skip. No new NWC was written and freshness will not advance.", modelName, "Exporting");
+                        return new NwcExportResult
+                        {
+                            Outcome = NwcExportOutcome.SkippedExisting,
+                            OutputPath = fullOutputPath
+                        };
                     }
 
                     if (string.Equals(settings.OverwritePolicy, "TimestampedCopy", StringComparison.OrdinalIgnoreCase))
@@ -74,7 +89,7 @@ namespace ScheduledNwcExporter.Revit
                 var exportOptions = new NavisworksExportOptions
                 {
                     ConvertElementProperties = settings.ConvertElementProperties,
-                    ExportLinks = false, // Explicitly disabled as per user request
+                    ExportLinks = false,
                     ExportElementIds = settings.ExportElementIds,
                     ExportRoomGeometry = settings.ExportRoomGeometry,
                     DivideFileIntoLevels = settings.DivideFileIntoLevels,
@@ -120,23 +135,23 @@ namespace ScheduledNwcExporter.Revit
                 if (!File.Exists(fullOutputPath))
                 {
                     _logger.Error("Export", $"Export completed without creating the expected output file: {fullOutputPath}", modelName, "VerifyingOutput");
-                    return false;
+                    return new NwcExportResult { Outcome = NwcExportOutcome.Failed, OutputPath = fullOutputPath };
                 }
 
                 var outputInfo = new FileInfo(fullOutputPath);
                 if (outputInfo.Length <= 0)
                 {
                     _logger.Error("Export", $"Export created an empty NWC output file: {fullOutputPath}", modelName, "VerifyingOutput");
-                    return false;
+                    return new NwcExportResult { Outcome = NwcExportOutcome.Failed, OutputPath = fullOutputPath };
                 }
 
                 _logger.Success("Export", $"NWC file created successfully. Size: {outputInfo.Length / (1024d * 1024d):F2} MB; path: {fullOutputPath}", modelName, "VerifyingOutput");
-                return true;
+                return new NwcExportResult { Outcome = NwcExportOutcome.Exported, OutputPath = fullOutputPath };
             }
             catch (Exception ex)
             {
                 _logger.Error("Export", $"Exception during NWC export: {ex.Message}", modelName, "Exporting", ex);
-                return false;
+                return new NwcExportResult { Outcome = NwcExportOutcome.Failed };
             }
         }
     }
