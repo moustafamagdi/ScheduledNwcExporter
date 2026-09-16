@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Autodesk.Revit.DB;
 using ScheduledNwcExporter.Logging;
 
@@ -7,7 +8,8 @@ namespace ScheduledNwcExporter.Revit
 {
     /// <summary>
     /// Prepares a dedicated 3D view for NWC export where all user worksets and elements are visible,
-    /// and Levels and Grids categories are explicitly hidden.
+    /// Levels and Grids are hidden, and project-level CAD imports/links are excluded.
+    /// CAD geometry embedded inside loadable families is intentionally preserved.
     /// </summary>
     public sealed class ExportViewService
     {
@@ -63,12 +65,11 @@ namespace ScheduledNwcExporter.Revit
                     return null;
                 }
 
-                // 3. Configure view visibility (Worksets, Levels, Grids, Detail Level) inside a transaction
+                // 3. Configure view visibility inside a transaction
                 using (var t = new Transaction(doc, "Configure NWC Export 3D View"))
                 {
                     t.Start();
 
-                    // Ensure Fine detail level and shaded/consistent colors if supported
                     try
                     {
                         exportView.DetailLevel = ViewDetailLevel.Fine;
@@ -94,6 +95,13 @@ namespace ScheduledNwcExporter.Revit
                     // Hide Levels and Grids categories
                     HideCategory(doc, exportView, BuiltInCategory.OST_Levels, modelName);
                     HideCategory(doc, exportView, BuiltInCategory.OST_Grids, modelName);
+
+                    // Exclude all CAD ImportInstance elements that exist directly in the project,
+                    // including linked DWG/DXF/DGN/SAT-style instances. We hide element instances,
+                    // not OST_ImportObjectStyles, because hiding the whole category would also hide
+                    // imported CAD geometry nested inside families. ImportInstance elements that live
+                    // inside a family document are not project-document instances and therefore remain.
+                    HideProjectCadInstances(doc, exportView, modelName);
 
                     // Ensure all user worksets are visible in this view
                     if (doc.IsWorkshared)
@@ -122,6 +130,40 @@ namespace ScheduledNwcExporter.Revit
             {
                 _logger.Error("ViewService", $"Error preparing export 3D view: {ex.Message}", modelName, "ExportView", ex);
                 return null;
+            }
+        }
+
+        private void HideProjectCadInstances(Document doc, View3D view, string modelName)
+        {
+            try
+            {
+                List<ElementId> cadIds = new FilteredElementCollector(doc)
+                    .OfClass(typeof(ImportInstance))
+                    .WhereElementIsNotElementType()
+                    .Cast<ImportInstance>()
+                    .Select(instance => instance.Id)
+                    .Where(id => id != ElementId.InvalidElementId)
+                    .ToList();
+
+                if (cadIds.Count == 0)
+                {
+                    _logger.Debug("ViewService", "No project-level CAD imports or CAD links found to hide.", modelName, "ExportView");
+                    return;
+                }
+
+                var hideableIds = cadIds.Where(id => view.CanElementBeHidden(id)).ToList();
+                if (hideableIds.Count > 0)
+                {
+                    view.HideElements(hideableIds);
+                }
+
+                _logger.Info("ViewService",
+                    $"Excluded {hideableIds.Count} project-level CAD import/link instance(s) from the export view. Imports embedded in families are preserved.",
+                    modelName, "ExportView");
+            }
+            catch (Exception ex)
+            {
+                _logger.Warning("ViewService", $"Could not exclude project-level CAD imports/links: {ex.Message}", modelName, "ExportView", ex);
             }
         }
 
