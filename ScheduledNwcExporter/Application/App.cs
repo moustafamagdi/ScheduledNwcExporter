@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Autodesk.Revit.UI;
+using ScheduledNwcExporter.Reliability;
 using ScheduledNwcExporter.UI.Views;
 
 namespace ScheduledNwcExporter.Application
@@ -54,9 +55,7 @@ namespace ScheduledNwcExporter.Application
                 }
 
                 if (panel == null)
-                {
                     panel = application.CreateRibbonPanel(tabName, "Navisworks Export");
-                }
 
                 string assemblyPath = Assembly.GetExecutingAssembly().Location;
                 var buttonData = new PushButtonData(
@@ -71,9 +70,8 @@ namespace ScheduledNwcExporter.Application
 
                 var pushButton = panel.AddItem(buttonData) as PushButton;
                 if (pushButton != null)
-                {
                     pushButton.AvailabilityClassName = "ScheduledNwcExporter.Application.CommandAvailability";
-                }
+
                 return Result.Succeeded;
             }
             catch (Exception ex)
@@ -83,20 +81,12 @@ namespace ScheduledNwcExporter.Application
             }
         }
 
-        /// <summary>
-        /// Makes direct loading through Revit Add-In Manager work as well as a normal .addin startup.
-        /// ExternalEvent.Create must happen inside a valid Revit API execution context, so the command
-        /// calls this method before constructing the modeless window.
-        /// </summary>
         internal static void EnsureServicesInitialized(UIApplication uiApplication)
         {
             if (uiApplication == null) throw new ArgumentNullException(nameof(uiApplication));
 
             InitializeCoreServices();
 
-            // Add-In Manager does not execute IExternalApplication.OnStartup when only the command
-            // class is loaded. UIApplication exposes the same dialog event and lets this test path
-            // retain unattended dialog handling without requiring a second application startup.
             if (!_dialogHandlerSubscribed)
             {
                 uiApplication.DialogBoxShowing += UnattendedDialogHandler.OnDialogBoxShowing;
@@ -106,15 +96,16 @@ namespace ScheduledNwcExporter.Application
 
         private static void InitializeCoreServices()
         {
-            if (ConfigManager == null)
-            {
-                ConfigManager = new Configuration.ConfigurationManager();
-            }
-
+            // Create one logger for the entire Revit session and inject it into configuration and
+            // downstream services. This prevents one add-in session from fragmenting diagnostics
+            // across multiple unrelated log files.
             if (Logger == null)
-            {
-                Logger = new Logging.FileLogger { DebugMode = ConfigManager.CurrentSettings.DebugMode };
-            }
+                Logger = new Logging.FileLogger();
+
+            if (ConfigManager == null)
+                ConfigManager = new Configuration.ConfigurationManager(Logger);
+
+            Logger.DebugMode = ConfigManager.CurrentSettings.DebugMode;
 
             NormalizeScheduleDays();
 
@@ -129,8 +120,6 @@ namespace ScheduledNwcExporter.Application
 
             if (QueueEvent == null)
             {
-                // This method is called only from OnStartup or IExternalCommand.Execute: both are
-                // valid Revit API contexts for creating an ExternalEvent.
                 QueueEvent = ExternalEvent.Create(QueueHandler);
                 QueueHandler.AttachExternalEvent(QueueEvent);
             }
@@ -140,9 +129,7 @@ namespace ScheduledNwcExporter.Application
                 Scheduler = new Scheduler.ScheduleManager(ConfigManager.CurrentSettings, Logger);
                 Scheduler.ScheduledTimeReached += OnScheduledTimeReachedStatic;
                 if (ConfigManager.CurrentSettings.Scheduler.IsSchedulerEnabled)
-                {
                     Scheduler.Start();
-                }
             }
         }
 
@@ -179,16 +166,23 @@ namespace ScheduledNwcExporter.Application
         {
             if (ConfigManager == null || QueueHandler == null || Logger == null) return;
 
+            // When the manager is visible, its ViewModel owns the scheduled callback so the UI can
+            // stay synchronized. The app-level path handles schedules while the window is closed.
             if (ExportManagerWindow != null && ExportManagerWindow.IsVisible)
-            {
                 return;
-            }
 
-            var activeJobs = ConfigManager.CurrentSettings.Jobs.Where(j => j.IsEnabled).ToList();
+            var activeJobs = ConfigManager.CurrentSettings.Jobs
+                .Where(job => job.IsEnabled && FreshnessEvaluator.Evaluate(job, ConfigManager.CurrentSettings).NeedsExport)
+                .ToList();
+
             if (activeJobs.Count > 0)
             {
-                Logger.Info("Scheduler", $"Starting unattended scheduled export of {activeJobs.Count} models.");
+                Logger.Info("Scheduler", $"Starting unattended scheduled export of {activeJobs.Count} stale/unverified model(s).");
                 QueueHandler.Start(activeJobs, Revit.ExternalEvents.SessionTriggerSource.Scheduler);
+            }
+            else
+            {
+                Logger.Info("Scheduler", "Scheduled time reached, but no enabled model currently requires a verified export.");
             }
         }
 
@@ -218,8 +212,8 @@ namespace ScheduledNwcExporter.Application
             QueueEvent = null;
             QueueHandler = null;
             Scheduler = null;
-            Logger = null;
             ConfigManager = null;
+            Logger = null;
 
             return Result.Succeeded;
         }
