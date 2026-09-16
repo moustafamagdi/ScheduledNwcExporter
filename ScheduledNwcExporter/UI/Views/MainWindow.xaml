@@ -21,7 +21,6 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Header / Status Banner -->
         <Border Grid.Row="0" Background="#FF2D2D30" Padding="15" CornerRadius="4" Margin="0,0,0,15">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -41,7 +40,6 @@
             </Grid>
         </Border>
 
-        <!-- Model Queue List -->
         <GroupBox Grid.Row="1" Header="Export Model Queue" FontWeight="Bold" Padding="10">
             <Grid>
                 <Grid.RowDefinitions>
@@ -60,6 +58,8 @@
                         <Button Content=" Remove " Command="{Binding RemoveModelCommand}" Width="75" Height="28" Margin="0,0,8,0"/>
                         <Button Content=" ↻ Refresh Dates " Command="{Binding RefreshModelDatesCommand}" Width="120" Height="28" Margin="0,0,8,0"
                                 ToolTip="Refresh local file dates and ACC item metadata without opening models."/>
+                        <Button Content=" ✓ Needs Export " Command="{Binding SelectNeedsExportCommand}" Width="110" Height="28" Margin="0,0,8,0"
+                                ToolTip="Select only enabled models whose verified NWC state is not current."/>
                         <Button Content=" ↥ Priority " Command="{Binding ResetQueueOrderCommand}" Width="85" Height="28"
                                 ToolTip="Restore the action-priority order: late, not exported, failed, then current."/>
                     </StackPanel>
@@ -77,33 +77,33 @@
                         </Style>
                     </DataGrid.RowStyle>
                     <DataGrid.Columns>
-                        <DataGridCheckBoxColumn Header="On" Binding="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}" SortMemberPath="IsEnabled" Width="45">
+                        <DataGridCheckBoxColumn Header="Run" Binding="{Binding IsSelectedForRun, UpdateSourceTrigger=PropertyChanged}" SortMemberPath="IsSelectedForRun" Width="45">
                             <DataGridCheckBoxColumn.ElementStyle>
                                 <Style TargetType="CheckBox">
                                     <Setter Property="HorizontalAlignment" Value="Center"/>
                                     <Setter Property="VerticalAlignment" Value="Center"/>
+                                    <Setter Property="IsEnabled" Value="{Binding IsEnabled}"/>
                                 </Style>
                             </DataGridCheckBoxColumn.ElementStyle>
                             <DataGridCheckBoxColumn.EditingElementStyle>
                                 <Style TargetType="CheckBox">
                                     <Setter Property="HorizontalAlignment" Value="Center"/>
                                     <Setter Property="VerticalAlignment" Value="Center"/>
+                                    <Setter Property="IsEnabled" Value="{Binding IsEnabled}"/>
                                 </Style>
                             </DataGridCheckBoxColumn.EditingElementStyle>
                         </DataGridCheckBoxColumn>
                         <DataGridTemplateColumn Header="Type" Width="95" SortMemberPath="IsCloud">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding QueueTypeDisplay}" ToolTip="{Binding QueueTypeToolTip}"
-                                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding QueueTypeDisplay}" ToolTip="{Binding QueueTypeToolTip}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
                         <DataGridTemplateColumn Header="Source Model" Width="*" MinWidth="220" SortMemberPath="DisplaySourcePath">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding DisplaySourcePath}" ToolTip="{Binding TechnicalSourcePath}"
-                                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding DisplaySourcePath}" ToolTip="{Binding TechnicalSourcePath}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
@@ -115,24 +115,21 @@
                             </DataGridTemplateColumn.HeaderStyle>
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding QueueFreshnessDisplay}" ToolTip="{Binding QueueFreshnessToolTip}"
-                                               FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding QueueFreshnessDisplay}" ToolTip="{Binding QueueFreshnessToolTip}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
                         <DataGridTemplateColumn Header="Last Export" Width="100" SortMemberPath="LastSuccessfulExportUtc">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding LastSuccessfulExportDisplay}" ToolTip="{Binding ExportLagToolTip}"
-                                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding LastSuccessfulExportDisplay}" ToolTip="{Binding ExportLagToolTip}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
                         <DataGridTemplateColumn Header="NWC Output" Width="185" SortMemberPath="FullOutputPath">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding FullOutputPath}" ToolTip="{Binding FullOutputPath}"
-                                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding FullOutputPath}" ToolTip="{Binding FullOutputPath}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
@@ -141,8 +138,7 @@
                                 <DataTemplate>
                                     <Grid Margin="4,2">
                                         <ProgressBar Value="{Binding ProgressPercentage}" Minimum="0" Maximum="100" Height="15"/>
-                                        <TextBlock Text="{Binding QueueStateDisplay}" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                   Foreground="Black" TextTrimming="CharacterEllipsis" ToolTip="{Binding RunHistory, Converter={StaticResource RunHistoryConverter}}"/>
+                                        <TextBlock Text="{Binding QueueStateDisplay}" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="Black" TextTrimming="CharacterEllipsis" ToolTip="{Binding RunHistory, Converter={StaticResource RunHistoryConverter}}"/>
                                     </Grid>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
@@ -152,7 +148,6 @@
             </Grid>
         </GroupBox>
 
-        <!-- Compact Export Configuration: intentionally no scrollbars -->
         <Border Grid.Row="2" Margin="0,12,0,12" Height="215" Background="White" BorderBrush="#FFE2E8F0" BorderThickness="1" CornerRadius="8">
             <Grid Margin="10">
                 <Grid.ColumnDefinitions>
@@ -161,7 +156,6 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- Schedule Card -->
                 <Border Grid.Column="0" Background="#FFF7FAFF" BorderBrush="#FFD9E6F5" BorderThickness="1" CornerRadius="6" Padding="8" Margin="0,0,8,0">
                     <Grid>
                         <Grid.RowDefinitions>
@@ -217,7 +211,6 @@
                     </Grid>
                 </Border>
 
-                <!-- General Export Card -->
                 <Border Grid.Column="1" Background="#FFF9FAFB" BorderBrush="#FFE2E8F0" BorderThickness="1" CornerRadius="6" Padding="8" Margin="0,0,8,0">
                     <Grid>
                         <Grid.RowDefinitions>
@@ -242,7 +235,6 @@
                     </Grid>
                 </Border>
 
-                <!-- Advanced Options Card -->
                 <Border Grid.Column="2" Background="#FFFFFCF7" BorderBrush="#FFF1E5C8" BorderThickness="1" CornerRadius="6" Padding="8">
                     <Grid>
                         <Grid.RowDefinitions>
@@ -289,7 +281,6 @@
             </Grid>
         </Border>
 
-        <!-- Current Activity / Progress -->
         <Border Grid.Row="3" Background="White" BorderBrush="#FFDDDDDD" BorderThickness="1" Padding="12" CornerRadius="4" Margin="0,0,0,15">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -319,7 +310,6 @@
             </Grid>
         </Border>
 
-        <!-- Footer Buttons -->
         <Grid Grid.Row="4">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
