@@ -25,15 +25,21 @@ namespace ScheduledNwcExporter.UI.Views
             string reason = evaluation.Reason ?? string.Empty;
             if (reason.IndexOf("No verified export snapshot", StringComparison.OrdinalIgnoreCase) >= 0)
                 return "● Needs export";
-            if (reason.IndexOf("output", StringComparison.OrdinalIgnoreCase) >= 0)
-                return "▲ Output missing";
-            if (reason.IndexOf("settings", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                reason.IndexOf("scope", StringComparison.OrdinalIgnoreCase) >= 0)
-                return "▲ Settings changed";
-            if (reason.IndexOf("ACC model tip version", StringComparison.OrdinalIgnoreCase) >= 0)
+            if (reason.IndexOf("ACC freshness is unverified", StringComparison.OrdinalIgnoreCase) >= 0)
+                return "▲ ACC unverified";
+            if (reason.IndexOf("tip version changed", StringComparison.OrdinalIgnoreCase) >= 0)
                 return "▲ ACC updated" + modified;
             if (reason.IndexOf("modified after", StringComparison.OrdinalIgnoreCase) >= 0)
                 return "▲ Update NWC" + modified;
+            if (reason.IndexOf("no longer exists", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                reason.IndexOf("output is empty", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                reason.IndexOf("output cannot be verified", StringComparison.OrdinalIgnoreCase) >= 0)
+                return "▲ Output missing";
+            if (reason.IndexOf("settings", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                reason.IndexOf("scope", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                reason.IndexOf("output target", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                reason.IndexOf("source identity", StringComparison.OrdinalIgnoreCase) >= 0)
+                return "▲ Config changed";
 
             return "▲ Needs export" + modified;
         }
