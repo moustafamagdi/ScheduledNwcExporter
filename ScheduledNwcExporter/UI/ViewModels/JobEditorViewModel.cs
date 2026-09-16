@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using System.Windows.Input;
 using ScheduledNwcExporter.Configuration;
-
 using ScheduledNwcExporter.UI;
 
 namespace ScheduledNwcExporter.UI.ViewModels
@@ -61,13 +60,12 @@ namespace ScheduledNwcExporter.UI.ViewModels
                 OutputDirectory = job.OutputDirectory,
                 OutputFileNameTemplate = job.OutputFileNameTemplate,
                 IsEnabled = job.IsEnabled,
+                IsSelectedForRun = job.IsSelectedForRun,
                 RetryCount = job.RetryCount,
                 RetryDelaySeconds = job.RetryDelaySeconds,
                 Status = job.Status,
                 LastRun = job.LastRun,
                 LastError = job.LastError,
-                // The editor works on a separate job instance. Deep-copy history so changing an
-                // output folder cannot erase the original model's export record or share mutations.
                 RunHistory = job.RunHistory?.ConvertAll(run => new RunResult
                 {
                     Timestamp = run.Timestamp,
@@ -100,12 +98,10 @@ namespace ScheduledNwcExporter.UI.ViewModels
             BrowseSourceCommand = new RelayCommand(_ => BrowseSourceFile());
             BrowseCloudCommand = new RelayCommand(_ => BrowseCloudFile());
             BrowseOutputCommand = new RelayCommand(_ => BrowseOutputFolder());
-            
+
             Job.PropertyChanged += (s, e) => Validate();
             if (Job.CustomExportSettings != null)
-            {
                 Job.CustomExportSettings.PropertyChanged += (s, e) => Validate();
-            }
 
             Validate();
         }
@@ -119,19 +115,16 @@ namespace ScheduledNwcExporter.UI.ViewModels
                 return;
             }
 
-            var cloudVm = new CloudBrowserViewModel(token, new Logging.FileLogger()); // In real app, pass the logger instance
+            var logger = ScheduledNwcExporter.Application.App.Logger ?? new Logging.FileLogger();
+            var cloudVm = new CloudBrowserViewModel(token, logger);
             var cloudWindow = new Views.CloudBrowserWindow(cloudVm);
             if (cloudWindow.ShowDialog() == true && cloudWindow.SelectedNode != null)
             {
-                // Format: acc://ModelName.rvt|Region|ProjectGUID|ModelGUID
                 var node = cloudWindow.SelectedNode;
                 string modelName = node.Name;
                 if (!modelName.EndsWith(".rvt", StringComparison.OrdinalIgnoreCase))
-                {
                     modelName += ".rvt";
-                }
 
-                // We need at least ProjectGUID and ModelGUID for proper opening
                 if (string.IsNullOrEmpty(node.RevitProjectGuid) || string.IsNullOrEmpty(node.RevitModelGuid))
                 {
                     System.Windows.MessageBox.Show("This file is not initiated as a Revit Cloud Model and cannot be opened directly. Please ensure it is a workshared cloud model.", "Incompatible Model", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
@@ -177,9 +170,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
                 Job.LastMetadataRefreshUtc = DateTime.UtcNow;
                 Job.SourceMetadataError = string.Empty;
                 if (string.IsNullOrEmpty(Job.OutputDirectory))
-                {
                     Job.OutputDirectory = Path.GetDirectoryName(openFileDialog.FileName) ?? string.Empty;
-                }
                 OnPropertyChanged(nameof(Job));
                 Validate();
             }
@@ -214,9 +205,8 @@ namespace ScheduledNwcExporter.UI.ViewModels
                 ValidationMessage = "✕ Source model file not found.";
                 return false;
             }
-            
-            // For cloud paths, we check if it contains .rvt since it might be followed by URN
-            if (!Job.SourceModelPath.ToLower().Contains(".rvt"))
+
+            if (!Job.SourceModelPath.ToLowerInvariant().Contains(".rvt"))
             {
                 ValidationMessage = "✕ Source file must be a .rvt Revit model.";
                 return false;
