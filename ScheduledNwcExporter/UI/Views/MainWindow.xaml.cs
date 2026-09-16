@@ -27,6 +27,7 @@ namespace ScheduledNwcExporter.UI.Views
         private readonly MainViewModel _viewModel;
         private readonly ILogger _logger;
         private ListSortDirection? _freshnessSortDirection;
+        private bool _initialFreshnessSelectionPending = true;
 
         public MainWindow()
         {
@@ -34,20 +35,29 @@ namespace ScheduledNwcExporter.UI.Views
             {
                 InitializeComponent();
 
-                // AUDIT FIX: Use App-level services for consistent lifecycle
                 _logger = App.Logger ?? new FileLogger();
                 _exportQueueHandler = App.QueueHandler ?? throw new InvalidOperationException("Queue handler not initialized.");
                 _exportQueueEvent = App.QueueEvent ?? throw new InvalidOperationException("External event not initialized.");
 
-                // Attach a global exception handler for this window's dispatcher
                 this.Dispatcher.UnhandledException += Dispatcher_UnhandledException;
 
                 _viewModel = new MainViewModel(App.ConfigManager ?? new ConfigurationManager(), _logger, _exportQueueHandler, App.Scheduler);
                 DataContext = _viewModel;
                 Closed += MainWindow_Closed;
 
-                // Register interactive event handlers
                 RegisterSafeEventHandlers();
+                AddSelectNeedsExportButton();
+
+                // The VM refreshes source dates automatically at startup. Select once immediately from
+                // cached metadata, then re-apply after that startup refresh finishes so the checkboxes
+                // always represent the latest known freshness state.
+                _viewModel.PropertyChanged += ViewModel_PropertyChanged;
+                SelectNeedsExportModels(false);
+                if (!_viewModel.IsRefreshingModelDates)
+                {
+                    SelectNeedsExportModels(true);
+                    _initialFreshnessSelectionPending = false;
+                }
             }
             catch (Exception ex)
             {
@@ -59,6 +69,77 @@ namespace ScheduledNwcExporter.UI.Views
             }
         }
 
+        private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (_initialFreshnessSelectionPending &&
+                e.PropertyName == nameof(MainViewModel.IsRefreshingModelDates) &&
+                !_viewModel.IsRefreshingModelDates)
+            {
+                SelectNeedsExportModels(true);
+                _initialFreshnessSelectionPending = false;
+            }
+        }
+
+        private void AddSelectNeedsExportButton()
+        {
+            // Keep the XAML layout stable: locate the queue toolbar by its existing Refresh Dates button
+            // and insert the smart-selection action beside it.
+            Button? refreshButton = FindButtonByContent(this, "↻ Refresh Dates");
+            if (refreshButton?.Parent is Panel toolbar)
+            {
+                var button = new Button
+                {
+                    Content = " ✓ Needs Export ",
+                    Width = 110,
+                    Height = 28,
+                    Margin = new Thickness(0, 0, 8, 0),
+                    ToolTip = "Enable only models whose NWC is not confirmed current; disable models that are already fresh."
+                };
+                button.Click += (_, __) => SelectNeedsExportModels(true);
+
+                int index = toolbar.Children.IndexOf(refreshButton);
+                toolbar.Children.Insert(Math.Min(index + 1, toolbar.Children.Count), button);
+            }
+        }
+
+        private static Button? FindButtonByContent(DependencyObject root, string contentText)
+        {
+            int count = VisualTreeHelper.GetChildrenCount(root);
+            for (int i = 0; i < count; i++)
+            {
+                DependencyObject child = VisualTreeHelper.GetChild(root, i);
+                if (child is Button button && string.Equals(button.Content?.ToString()?.Trim(), contentText.Trim(), StringComparison.Ordinal))
+                    return button;
+
+                Button? nested = FindButtonByContent(child, contentText);
+                if (nested != null) return nested;
+            }
+            return null;
+        }
+
+        private void SelectNeedsExportModels(bool saveConfiguration)
+        {
+            int enabled = 0;
+            foreach (ModelExportJob job in _viewModel.Jobs)
+            {
+                // A model is "fresh" only when we have both timestamps and the latest successful
+                // NWC is at or after the source modification. Unknown/unverified freshness is kept ON
+                // so unattended export errs on the safe side rather than silently skipping a model.
+                bool isConfirmedFresh = job.LastSuccessfulExportUtc.HasValue &&
+                                        job.ExportLag.HasValue &&
+                                        job.ExportLag.Value.TotalMinutes <= 0;
+                job.IsEnabled = !isConfirmedFresh;
+                if (job.IsEnabled) enabled++;
+            }
+
+            if (saveConfiguration)
+            {
+                App.ConfigManager?.SaveConfiguration();
+            }
+
+            _logger?.Info("UI", $"Smart selection enabled {enabled} of {_viewModel.Jobs.Count} model(s) that need export or have unverified freshness.", string.Empty, "FreshnessSelection");
+        }
+
         private void Dispatcher_UnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
         {
             _logger?.Error("UI", $"Unhandled exception caught: {e.Exception.Message}", string.Empty, "Dispatcher", e.Exception);
@@ -68,7 +149,6 @@ namespace ScheduledNwcExporter.UI.Views
 
         private void RegisterSafeEventHandlers()
         {
-            // Enable single-click checkbox toggling on DataGrid
             QueueDataGrid.PreviewMouseLeftButtonDown += (s, e) =>
             {
                 try
@@ -84,24 +164,15 @@ namespace ScheduledNwcExporter.UI.Views
                         if (cell.DataContext is ModelExportJob job)
                         {
                             bool newState = !job.IsEnabled;
-                            
-                            // Support bulk toggling if multiple rows are selected
                             if (QueueDataGrid.SelectedItems.Count > 1 && QueueDataGrid.SelectedItems.Contains(job))
                             {
-                                var selectedJobs = QueueDataGrid.SelectedItems.Cast<object>()
-                                    .OfType<ModelExportJob>()
-                                    .ToList();
-
-                                foreach (var selectedJob in selectedJobs)
-                                {
-                                    selectedJob.IsEnabled = newState;
-                                }
+                                var selectedJobs = QueueDataGrid.SelectedItems.Cast<object>().OfType<ModelExportJob>().ToList();
+                                foreach (var selectedJob in selectedJobs) selectedJob.IsEnabled = newState;
                             }
                             else
                             {
                                 job.IsEnabled = newState;
                             }
-                            
                             e.Handled = true;
                         }
                     }
@@ -112,24 +183,17 @@ namespace ScheduledNwcExporter.UI.Views
                 }
             };
 
-            // Support bulk toggling with Space key
             QueueDataGrid.PreviewKeyDown += (s, e) =>
             {
                 try
                 {
                     if (e.Key == System.Windows.Input.Key.Space && QueueDataGrid.SelectedItems.Count > 0)
                     {
-                        var selectedJobs = QueueDataGrid.SelectedItems.Cast<object>()
-                            .OfType<ModelExportJob>()
-                            .ToList();
-
+                        var selectedJobs = QueueDataGrid.SelectedItems.Cast<object>().OfType<ModelExportJob>().ToList();
                         if (selectedJobs.Any())
                         {
                             bool newState = !selectedJobs.First().IsEnabled;
-                            foreach (var job in selectedJobs)
-                            {
-                                job.IsEnabled = newState;
-                            }
+                            foreach (var job in selectedJobs) job.IsEnabled = newState;
                             e.Handled = true;
                         }
                     }
@@ -146,9 +210,7 @@ namespace ScheduledNwcExporter.UI.Views
             try
             {
                 if (DataContext is MainViewModel viewModel)
-                {
                     viewModel.UpdateSelectedJobCount(QueueDataGrid.SelectedItems.Count);
-                }
             }
             catch (Exception ex)
             {
@@ -163,8 +225,6 @@ namespace ScheduledNwcExporter.UI.Views
                 if (!(sender is DataGridColumnHeader header) || header.Column == null) return;
                 if (!(QueueDataGrid.ItemsSource is ICollectionView jobsView)) return;
 
-                // Keep this state ourselves: WPF may reset a template-column header's SortDirection
-                // during collection refreshes, which otherwise makes every click look like the first click.
                 _freshnessSortDirection = _freshnessSortDirection == ListSortDirection.Descending
                     ? ListSortDirection.Ascending
                     : ListSortDirection.Descending;
@@ -178,9 +238,7 @@ namespace ScheduledNwcExporter.UI.Views
                 }
 
                 foreach (DataGridColumn column in QueueDataGrid.Columns)
-                {
                     column.SortDirection = ReferenceEquals(column, header.Column) ? direction : null;
-                }
 
                 e.Handled = true;
             }
@@ -194,10 +252,10 @@ namespace ScheduledNwcExporter.UI.Views
         {
             try
             {
+                _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
                 _viewModel?.Shutdown();
-                // AUDIT FIX: Do NOT dispose App-level event here, just detach VM listeners
             }
-            catch { /* Ignore cleanup errors */ }
+            catch { }
         }
     }
 
@@ -240,23 +298,22 @@ namespace ScheduledNwcExporter.UI.Views
                     switch (status)
                     {
                         case JobStatus.Success:
-                            return new SolidColorBrush(Color.FromRgb(144, 238, 144)); // LightGreen
+                            return new SolidColorBrush(Color.FromRgb(144, 238, 144));
                         case JobStatus.Processing:
                         case JobStatus.Retrying:
-                            return new SolidColorBrush(Color.FromRgb(152, 251, 152)); // PaleGreen
+                            return new SolidColorBrush(Color.FromRgb(152, 251, 152));
                         case JobStatus.Failed:
-                            return new SolidColorBrush(Color.FromRgb(255, 235, 235)); // Very light red
+                            return new SolidColorBrush(Color.FromRgb(255, 235, 235));
                         case JobStatus.Cancelled:
-                            return new SolidColorBrush(Color.FromRgb(255, 250, 205)); // LemonChiffon
+                            return new SolidColorBrush(Color.FromRgb(255, 250, 205));
                         case JobStatus.Skipped:
-                            return new SolidColorBrush(Color.FromRgb(245, 245, 245)); // WhiteSmoke
+                            return new SolidColorBrush(Color.FromRgb(245, 245, 245));
                         default:
                             return Brushes.Transparent;
                     }
                 }
             }
             catch { }
-
             return Brushes.Transparent;
         }
 
@@ -285,9 +342,7 @@ namespace ScheduledNwcExporter.UI.Views
                     };
                     sb.AppendLine($"{statusIcon} {run.Timestamp:MM-dd HH:mm} - {run.Status} ({run.Duration})");
                     if (!string.IsNullOrEmpty(run.ErrorMessage))
-                    {
                         sb.AppendLine($"   Error: {run.ErrorMessage}");
-                    }
                 }
                 return sb.ToString().TrimEnd();
             }
