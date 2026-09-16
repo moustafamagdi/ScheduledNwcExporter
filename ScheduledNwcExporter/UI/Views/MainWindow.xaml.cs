@@ -28,6 +28,7 @@ namespace ScheduledNwcExporter.UI.Views
         private readonly ILogger _logger;
         private ListSortDirection? _freshnessSortDirection;
         private bool _initialFreshnessSelectionPending = true;
+        private bool _needsExportButtonAdded;
 
         public MainWindow()
         {
@@ -46,11 +47,8 @@ namespace ScheduledNwcExporter.UI.Views
                 Closed += MainWindow_Closed;
 
                 RegisterSafeEventHandlers();
-                AddSelectNeedsExportButton();
+                Loaded += MainWindow_Loaded;
 
-                // The VM refreshes source dates automatically at startup. Select once immediately from
-                // cached metadata, then re-apply after that startup refresh finishes so the checkboxes
-                // always represent the latest known freshness state.
                 _viewModel.PropertyChanged += ViewModel_PropertyChanged;
                 SelectNeedsExportModels(false);
                 if (!_viewModel.IsRefreshingModelDates)
@@ -69,6 +67,13 @@ namespace ScheduledNwcExporter.UI.Views
             }
         }
 
+        private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            // WPF's visual tree is guaranteed to exist here. Adding the button in the constructor
+            // could run too early, which made the action invisible even though its logic existed.
+            AddSelectNeedsExportButton();
+        }
+
         private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             if (_initialFreshnessSelectionPending &&
@@ -82,8 +87,8 @@ namespace ScheduledNwcExporter.UI.Views
 
         private void AddSelectNeedsExportButton()
         {
-            // Keep the XAML layout stable: locate the queue toolbar by its existing Refresh Dates button
-            // and insert the smart-selection action beside it.
+            if (_needsExportButtonAdded) return;
+
             Button? refreshButton = FindButtonByContent(this, "↻ Refresh Dates");
             if (refreshButton?.Parent is Panel toolbar)
             {
@@ -99,6 +104,11 @@ namespace ScheduledNwcExporter.UI.Views
 
                 int index = toolbar.Children.IndexOf(refreshButton);
                 toolbar.Children.Insert(Math.Min(index + 1, toolbar.Children.Count), button);
+                _needsExportButtonAdded = true;
+            }
+            else
+            {
+                _logger?.Warning("UI", "Could not locate the queue toolbar to add the Needs Export button.", string.Empty, "FreshnessSelection");
             }
         }
 
@@ -122,9 +132,6 @@ namespace ScheduledNwcExporter.UI.Views
             int enabled = 0;
             foreach (ModelExportJob job in _viewModel.Jobs)
             {
-                // A model is "fresh" only when we have both timestamps and the latest successful
-                // NWC is at or after the source modification. Unknown/unverified freshness is kept ON
-                // so unattended export errs on the safe side rather than silently skipping a model.
                 bool isConfirmedFresh = job.LastSuccessfulExportUtc.HasValue &&
                                         job.ExportLag.HasValue &&
                                         job.ExportLag.Value.TotalMinutes <= 0;
@@ -252,6 +259,7 @@ namespace ScheduledNwcExporter.UI.Views
         {
             try
             {
+                Loaded -= MainWindow_Loaded;
                 _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
                 _viewModel?.Shutdown();
             }
