@@ -44,38 +44,42 @@ namespace ScheduledNwcExporter.Scheduler
             if (!_settings.Scheduler.IsSchedulerEnabled) return;
 
             DateTime now = DateTime.Now;
+            var modernSlots = _settings.Scheduler.Slots?
+                .Where(slot => slot != null)
+                .ToList();
 
-            // 1. Check legacy slot for backward compatibility
-            CheckAndTriggerSlot(_settings.Scheduler.ScheduledHour, _settings.Scheduler.ScheduledMinute, null, now);
-
-            // 2. Check all modern slots
-            if (_settings.Scheduler.Slots != null)
+            // Modern schedule slots are authoritative once at least one slot exists.
+            // The legacy hour/minute is retained strictly as a migration fallback for
+            // older configuration files that do not contain any modern slots.
+            if (modernSlots != null && modernSlots.Count > 0)
             {
-                foreach (var slot in _settings.Scheduler.Slots)
+                foreach (var slot in modernSlots)
                 {
-                    if (slot.IsEnabled && slot.Days.Contains(now.DayOfWeek))
+                    if (slot.IsEnabled && slot.Days != null && slot.Days.Contains(now.DayOfWeek))
                     {
                         CheckAndTriggerSlot(slot.Hour, slot.Minute, slot, now);
                     }
                 }
+                return;
             }
+
+            CheckAndTriggerSlot(_settings.Scheduler.ScheduledHour, _settings.Scheduler.ScheduledMinute, null, now);
         }
 
         private void CheckAndTriggerSlot(int targetHour, int targetMinute, ScheduleSlot? slot, DateTime now)
         {
-            if (now.Hour == targetHour && now.Minute == targetMinute)
+            if (now.Hour != targetHour || now.Minute != targetMinute) return;
+
+            // Ensure we only trigger once per minute/day for the current schedule time.
+            if (_lastTriggeredDate == null ||
+                _lastTriggeredDate.Value.Date != now.Date ||
+                _lastTriggeredDate.Value.Hour != now.Hour ||
+                _lastTriggeredDate.Value.Minute != now.Minute)
             {
-                // Ensure we only trigger once per minute/day for this specific time
-                if (_lastTriggeredDate == null || 
-                    _lastTriggeredDate.Value.Date != now.Date || 
-                    _lastTriggeredDate.Value.Hour != now.Hour || 
-                    _lastTriggeredDate.Value.Minute != now.Minute)
-                {
-                    _lastTriggeredDate = now;
-                    string source = slot != null ? "Multi-slot" : "Legacy-slot";
-                    _logger.Info("Scheduler", $"Scheduled execution time reached ({targetHour:D2}:{targetMinute:D2}) via {source}. Triggering export session.");
-                    ScheduledTimeReached?.Invoke(this, EventArgs.Empty);
-                }
+                _lastTriggeredDate = now;
+                string source = slot != null ? "Schedule-slot" : "Legacy-slot";
+                _logger.Info("Scheduler", $"Scheduled execution time reached ({targetHour:D2}:{targetMinute:D2}) via {source}. Triggering export session.");
+                ScheduledTimeReached?.Invoke(this, EventArgs.Empty);
             }
         }
     }
