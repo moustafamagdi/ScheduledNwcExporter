@@ -33,11 +33,6 @@ namespace ScheduledNwcExporter.Reliability
         public string OutputPath { get; set; } = string.Empty;
     }
 
-    /// <summary>
-    /// Persists verified export snapshots separately from the editable job configuration.
-    /// Only an NWC that was actually written is recorded here; skipped-existing runs never
-    /// advance freshness state.
-    /// </summary>
     public static class ExportStateStore
     {
         private static readonly object Sync = new object();
@@ -100,8 +95,6 @@ namespace ScheduledNwcExporter.Reliability
             }
             catch
             {
-                // A damaged state file must never make a model look current. Returning an empty
-                // store makes every job conservative (Needs Export) until a verified export occurs.
                 return new Dictionary<string, ExportStateRecord>(StringComparer.OrdinalIgnoreCase);
             }
         }
@@ -141,8 +134,6 @@ namespace ScheduledNwcExporter.Reliability
 
         internal static DateTime? ResolveCurrentSourceModifiedUtc(ModelExportJob job)
         {
-            // Local files are cheap to inspect and may change while the manager window is closed,
-            // so always prefer the live filesystem timestamp over cached UI metadata.
             if (!job.IsCloud && !string.IsNullOrWhiteSpace(job.SourceModelPath) && File.Exists(job.SourceModelPath))
                 return File.GetLastWriteTimeUtc(job.SourceModelPath);
 
@@ -166,6 +157,11 @@ namespace ScheduledNwcExporter.Reliability
         {
             if (job == null) throw new ArgumentNullException(nameof(job));
             if (appSettings == null) throw new ArgumentNullException(nameof(appSettings));
+
+            // For ACC jobs a failed metadata refresh means the latest cloud version is unknown.
+            // Never classify a cached version as Current in that condition.
+            if (job.IsCloud && !string.IsNullOrWhiteSpace(job.SourceMetadataError))
+                return NeedsExport("ACC freshness is unverified: " + job.SourceMetadataError);
 
             ExportStateRecord? record = ExportStateStore.Get(job.Id);
             if (record == null)
@@ -223,7 +219,6 @@ namespace ScheduledNwcExporter.Reliability
 
     public static class ExportFingerprintService
     {
-        // Bump this whenever the generated export-view policy changes in a way that can affect NWC content.
         private const string ExportScopeRevision = "NWC_SCOPE_2026_09_R1";
 
         public static string Compute(ExportSettings settings)
