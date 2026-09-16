@@ -10,6 +10,8 @@
         <local:BoolToCloudIconConverter x:Key="BoolToCloudIconConverter" />
         <local:StatusToBackgroundConverter x:Key="StatusToBackgroundConverter" />
         <local:RunHistoryConverter x:Key="RunHistoryConverter" />
+        <local:VerifiedFreshnessDisplayConverter x:Key="VerifiedFreshnessDisplayConverter" />
+        <local:VerifiedFreshnessToolTipConverter x:Key="VerifiedFreshnessToolTipConverter" />
     </Window.Resources>
 
     <Grid Margin="15">
@@ -115,7 +117,9 @@
                             </DataGridTemplateColumn.HeaderStyle>
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <TextBlock Text="{Binding QueueFreshnessDisplay}" ToolTip="{Binding QueueFreshnessToolTip}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding Converter={StaticResource VerifiedFreshnessDisplayConverter}}"
+                                               ToolTip="{Binding Converter={StaticResource VerifiedFreshnessToolTipConverter}}"
+                                               FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
