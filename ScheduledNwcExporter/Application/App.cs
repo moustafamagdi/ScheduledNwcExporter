@@ -105,6 +105,12 @@ namespace ScheduledNwcExporter.Application
                 ConfigManager = new Configuration.ConfigurationManager(Logger);
 
             Logger.DebugMode = ConfigManager.CurrentSettings.DebugMode;
+
+            // Older builds reused IsEnabled for the automatic freshness selection and persisted
+            // those transient choices. Run this once before the ViewModel calculates the new
+            // IsSelectedForRun state so legacy jobs do not appear incorrectly disabled/dimmed.
+            LegacyRunSelectionMigration.RunOnce(ConfigManager, Logger);
+
             NormalizeScheduleDays();
 
             if (QueueHandler == null)
