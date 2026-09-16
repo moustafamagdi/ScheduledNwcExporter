@@ -2,11 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
-using System.Threading.Tasks;
 using System.Windows.Input;
 using ScheduledNwcExporter.Core;
 using ScheduledNwcExporter.Logging;
-
 using ScheduledNwcExporter.UI;
 
 namespace ScheduledNwcExporter.UI.ViewModels
@@ -44,35 +42,25 @@ namespace ScheduledNwcExporter.UI.ViewModels
             set { if (SetProperty(ref _searchText, value)) ApplyFilter(); }
         }
 
+        private bool _revitFilesOnly = true;
+        public bool RevitFilesOnly
+        {
+            get => _revitFilesOnly;
+            set { if (SetProperty(ref _revitFilesOnly, value)) ApplyFilter(); }
+        }
+
+        private string _searchStatus = "Browse or search loaded ACC folders.";
+        public string SearchStatus
+        {
+            get => _searchStatus;
+            private set => SetProperty(ref _searchStatus, value);
+        }
+
         private string _breadcrumbs = "Cloud Root";
         public string Breadcrumbs
         {
             get => _breadcrumbs;
             set => SetProperty(ref _breadcrumbs, value);
-        }
-
-        private void UpdateBreadcrumbs()
-        {
-            if (SelectedNode == null)
-            {
-                Breadcrumbs = "Cloud Root";
-                return;
-            }
-
-            var path = new List<string>();
-            var current = SelectedNode;
-            while (current != null)
-            {
-                path.Insert(0, current.Name);
-                current = current.Parent;
-            }
-            Breadcrumbs = string.Join(" > ", path);
-        }
-
-        private void ApplyFilter()
-        {
-            // Simple filtering of top-level nodes for now
-            // In a real tree, we'd need recursive visibility
         }
 
         private bool _isLoading;
@@ -84,7 +72,6 @@ namespace ScheduledNwcExporter.UI.ViewModels
 
         public ICommand SelectCommand { get; }
         public ICommand CancelCommand { get; }
-
         public event Action<CloudNode> NodeSelected;
         public event Action RequestClose;
 
@@ -93,11 +80,40 @@ namespace ScheduledNwcExporter.UI.ViewModels
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _apsClient = new APSClient(accessToken, _logger);
             Nodes = new ObservableCollection<CloudNode>();
-            
-            SelectCommand = new RelayCommand(OnSelect, () => SelectedNode != null && SelectedNode.Type == CloudItemType.File);
-            CancelCommand = new RelayCommand(() => RequestClose?.Invoke());
 
+            SelectCommand = new RelayCommand(OnSelect, () => SelectedNode != null && SelectedNode.Type == CloudItemType.File && SelectedNode.Name.EndsWith(".rvt", StringComparison.OrdinalIgnoreCase));
+            CancelCommand = new RelayCommand(() => RequestClose?.Invoke());
             LoadInitialData();
+        }
+
+        private void UpdateBreadcrumbs()
+        {
+            if (SelectedNode == null)
+            {
+                Breadcrumbs = "Cloud Root";
+                return;
+            }
+
+            var path = new List<string>();
+            CloudNode current = SelectedNode;
+            while (current != null)
+            {
+                path.Insert(0, current.Name);
+                current = current.Parent;
+            }
+            Breadcrumbs = string.Join(" > ", path);
+        }
+
+        private void ApplyFilter()
+        {
+            string search = (SearchText ?? string.Empty).Trim();
+            int matches = 0;
+            foreach (CloudNode root in Nodes)
+                matches += root.ApplyFilter(search, RevitFilesOnly);
+
+            SearchStatus = string.IsNullOrWhiteSpace(search)
+                ? (RevitFilesOnly ? "Showing folders and Revit (.rvt) files in loaded branches." : "Showing all loaded ACC items.")
+                : $"{matches} matching file(s) in loaded branches. Expand a project/folder to load deeper content.";
         }
 
         private async void LoadInitialData()
@@ -107,9 +123,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
             {
                 var hubs = await _apsClient.GetHubsAsync();
                 if (hubs.Count == 0)
-                {
                     _logger.Warning("CloudBrowser", "No hubs found for the current user.");
-                }
 
                 foreach (var hub in hubs)
                 {
@@ -118,12 +132,13 @@ namespace ScheduledNwcExporter.UI.ViewModels
                         IsHub = true,
                         HubId = hub.Id,
                         Region = hub.Region,
-                        ApsClient = _apsClient
+                        ApsClient = _apsClient,
+                        TreeChanged = ApplyFilter
                     };
-                    // Add a dummy child to show the expander
-                    hubNode.Children.Add(new CloudNode("Loading...", CloudItemType.Folder, null, null, hubNode));
+                    hubNode.Children.Add(CloudNode.CreateLoadingNode(hubNode, ApplyFilter));
                     Nodes.Add(hubNode);
                 }
+                ApplyFilter();
             }
             catch (Exception ex)
             {
@@ -138,10 +153,8 @@ namespace ScheduledNwcExporter.UI.ViewModels
 
         private void OnSelect()
         {
-            if (SelectedNode != null && SelectedNode.Type == CloudItemType.File)
-            {
+            if (SelectedNode != null && SelectedNode.Type == CloudItemType.File && SelectedNode.Name.EndsWith(".rvt", StringComparison.OrdinalIgnoreCase))
                 NodeSelected?.Invoke(SelectedNode);
-            }
         }
     }
 
@@ -161,6 +174,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
         public bool IsProject { get; set; }
         public APSClient ApsClient { get; set; }
         public CloudNode Parent { get; set; }
+        public Action TreeChanged { get; set; }
 
         private bool _isExpanded;
         public bool IsExpanded
@@ -169,9 +183,7 @@ namespace ScheduledNwcExporter.UI.ViewModels
             set
             {
                 if (SetProperty(ref _isExpanded, value) && value)
-                {
                     LoadChildren();
-                }
             }
         }
 
@@ -193,31 +205,55 @@ namespace ScheduledNwcExporter.UI.ViewModels
             Parent = parent;
         }
 
-        /// <summary>
-        /// Returns the selected item's human-readable ACC hierarchy for queue display.
-        /// Technical identifiers stay separate and are never exposed in the normal UI.
-        /// </summary>
+        public static CloudNode CreateLoadingNode(CloudNode parent, Action treeChanged)
+        {
+            return new CloudNode("Loading...", CloudItemType.Folder, null, null, parent) { TreeChanged = treeChanged };
+        }
+
+        public int ApplyFilter(string search, bool revitFilesOnly)
+        {
+            if (string.Equals(Name, "Loading...", StringComparison.OrdinalIgnoreCase))
+            {
+                IsVisible = string.IsNullOrWhiteSpace(search);
+                return 0;
+            }
+
+            int childMatches = 0;
+            bool childVisible = false;
+            foreach (CloudNode child in Children)
+            {
+                childMatches += child.ApplyFilter(search, revitFilesOnly);
+                childVisible |= child.IsVisible;
+            }
+
+            bool isFolder = Type == CloudItemType.Folder;
+            bool isRvt = Type == CloudItemType.File && Name.EndsWith(".rvt", StringComparison.OrdinalIgnoreCase);
+            bool typeAllowed = isFolder || !revitFilesOnly || isRvt;
+            bool textMatches = string.IsNullOrWhiteSpace(search) || Name.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0;
+            bool selfVisible = typeAllowed && textMatches;
+
+            IsVisible = selfVisible || childVisible;
+            if (!string.IsNullOrWhiteSpace(search) && childVisible)
+                IsExpanded = true;
+
+            return childMatches + ((Type == CloudItemType.File && selfVisible) ? 1 : 0);
+        }
+
         public string GetReadableCloudPath()
         {
             var pathParts = new List<string>();
             CloudNode current = this;
-
             while (current != null)
             {
-                if (!string.IsNullOrWhiteSpace(current.Name) &&
-                    !string.Equals(current.Name, "Loading...", StringComparison.OrdinalIgnoreCase))
-                {
+                if (!string.IsNullOrWhiteSpace(current.Name) && !string.Equals(current.Name, "Loading...", StringComparison.OrdinalIgnoreCase))
                     pathParts.Insert(0, current.Name);
-                }
                 current = current.Parent;
             }
-
             return pathParts.Count > 0 ? "ACC / " + string.Join(" / ", pathParts) : "ACC";
         }
 
         private async void LoadChildren()
         {
-            // If already loaded (beyond the dummy), skip
             if (Children.Count > 0 && Children[0].Name != "Loading...") return;
 
             try
@@ -228,15 +264,16 @@ namespace ScheduledNwcExporter.UI.ViewModels
                     var projects = await ApsClient.GetProjectsAsync(Id);
                     foreach (var p in projects)
                     {
-                        var pNode = new CloudNode(p.Name, CloudItemType.Folder, p.Id, p.Id, this) 
-                        { 
-                            IsProject = true, 
-                            HubId = Id, // Current node's Id is the HubId
+                        var pNode = new CloudNode(p.Name, CloudItemType.Folder, p.Id, p.Id, this)
+                        {
+                            IsProject = true,
+                            HubId = Id,
                             Region = Region,
                             RevitProjectGuid = p.RevitProjectGuid,
-                            ApsClient = ApsClient 
+                            ApsClient = ApsClient,
+                            TreeChanged = TreeChanged
                         };
-                        pNode.Children.Add(new CloudNode("Loading...", CloudItemType.Folder, null, null, pNode));
+                        pNode.Children.Add(CreateLoadingNode(pNode, TreeChanged));
                         Children.Add(pNode);
                     }
                 }
@@ -245,13 +282,14 @@ namespace ScheduledNwcExporter.UI.ViewModels
                     var topFolders = await ApsClient.GetTopFoldersAsync(HubId, Id);
                     foreach (var folder in topFolders)
                     {
-                        var folderNode = new CloudNode(folder.Name, CloudItemType.Folder, folder.Id, ProjectId, this) 
-                        { 
+                        var folderNode = new CloudNode(folder.Name, CloudItemType.Folder, folder.Id, ProjectId, this)
+                        {
                             Region = Region,
                             RevitProjectGuid = RevitProjectGuid,
-                            ApsClient = ApsClient 
+                            ApsClient = ApsClient,
+                            TreeChanged = TreeChanged
                         };
-                        folderNode.Children.Add(new CloudNode("Loading...", CloudItemType.Folder, null, null, folderNode));
+                        folderNode.Children.Add(CreateLoadingNode(folderNode, TreeChanged));
                         Children.Add(folderNode);
                     }
                 }
@@ -260,29 +298,28 @@ namespace ScheduledNwcExporter.UI.ViewModels
                     var contents = await ApsClient.GetFolderContentsAsync(ProjectId, Id);
                     foreach (var item in contents)
                     {
-                        var node = new CloudNode(item.Name, item.Type, item.Id, ProjectId, this) 
-                        { 
+                        var node = new CloudNode(item.Name, item.Type, item.Id, ProjectId, this)
+                        {
                             VersionId = item.VersionId,
                             LastModifiedUtc = item.LastModifiedUtc,
                             Region = Region,
-                            // The authoritative GUIDs come from the file's tip Version API response.
-                            // Do not overwrite the version-level Project GUID with the parent project node value.
                             RevitProjectGuid = item.RevitProjectGuid,
                             RevitModelGuid = item.RevitModelGuid,
-                            ApsClient = ApsClient 
+                            ApsClient = ApsClient,
+                            TreeChanged = TreeChanged
                         };
                         if (item.Type == CloudItemType.Folder)
-                        {
-                            node.Children.Add(new CloudNode("Loading...", CloudItemType.Folder, null, null, node));
-                        }
+                            node.Children.Add(CreateLoadingNode(node, TreeChanged));
                         Children.Add(node);
                     }
                 }
+                TreeChanged?.Invoke();
             }
             catch (Exception)
             {
                 Children.Clear();
-                Children.Add(new CloudNode("Error loading items", CloudItemType.Folder, null, null));
+                Children.Add(new CloudNode("Error loading items", CloudItemType.Folder, null, null, this) { TreeChanged = TreeChanged });
+                TreeChanged?.Invoke();
             }
         }
     }
