@@ -52,30 +52,41 @@ namespace ScheduledNwcExporter.Reliability
             }
         }
 
-        public static void RecordSuccessfulExport(ModelExportJob job, AppSettings appSettings, string outputPath)
+        public static bool TryRecordSuccessfulExport(ModelExportJob job, AppSettings appSettings, string outputPath, out string error)
         {
-            if (job == null) throw new ArgumentNullException(nameof(job));
-            if (appSettings == null) throw new ArgumentNullException(nameof(appSettings));
-            if (string.IsNullOrWhiteSpace(job.Id)) return;
-
-            DateTime? sourceModifiedUtc = ResolveCurrentSourceModifiedUtc(job);
-            ExportSettings effectiveSettings = job.CustomExportSettings ?? appSettings.Export;
-
-            var record = new ExportStateRecord
+            error = string.Empty;
+            try
             {
-                JobId = job.Id,
-                ExportedAtUtc = DateTime.UtcNow,
-                SourceModifiedUtc = sourceModifiedUtc,
-                CloudVersionId = job.CloudVersionId ?? string.Empty,
-                ExportFingerprint = ExportFingerprintService.Compute(effectiveSettings),
-                OutputPath = outputPath ?? string.Empty
-            };
+                if (job == null) throw new ArgumentNullException(nameof(job));
+                if (appSettings == null) throw new ArgumentNullException(nameof(appSettings));
+                if (string.IsNullOrWhiteSpace(job.Id)) throw new InvalidOperationException("The export job has no persistent ID.");
 
-            lock (Sync)
+                DateTime? sourceModifiedUtc = ResolveCurrentSourceModifiedUtc(job);
+                ExportSettings effectiveSettings = job.CustomExportSettings ?? appSettings.Export;
+
+                var record = new ExportStateRecord
+                {
+                    JobId = job.Id,
+                    ExportedAtUtc = DateTime.UtcNow,
+                    SourceModifiedUtc = sourceModifiedUtc,
+                    CloudVersionId = job.CloudVersionId ?? string.Empty,
+                    ExportFingerprint = ExportFingerprintService.Compute(job, effectiveSettings),
+                    OutputPath = outputPath ?? string.Empty
+                };
+
+                lock (Sync)
+                {
+                    Dictionary<string, ExportStateRecord> records = LoadUnsafe();
+                    records[job.Id] = record;
+                    SaveUnsafe(records);
+                }
+
+                return true;
+            }
+            catch (Exception ex)
             {
-                Dictionary<string, ExportStateRecord> records = LoadUnsafe();
-                records[job.Id] = record;
-                SaveUnsafe(records);
+                error = ex.Message;
+                return false;
             }
         }
 
@@ -158,8 +169,6 @@ namespace ScheduledNwcExporter.Reliability
             if (job == null) throw new ArgumentNullException(nameof(job));
             if (appSettings == null) throw new ArgumentNullException(nameof(appSettings));
 
-            // For ACC jobs a failed metadata refresh means the latest cloud version is unknown.
-            // Never classify a cached version as Current in that condition.
             if (job.IsCloud && !string.IsNullOrWhiteSpace(job.SourceMetadataError))
                 return NeedsExport("ACC freshness is unverified: " + job.SourceMetadataError);
 
@@ -181,9 +190,9 @@ namespace ScheduledNwcExporter.Reliability
             }
 
             ExportSettings effectiveSettings = job.CustomExportSettings ?? appSettings.Export;
-            string currentFingerprint = ExportFingerprintService.Compute(effectiveSettings);
+            string currentFingerprint = ExportFingerprintService.Compute(job, effectiveSettings);
             if (!string.Equals(currentFingerprint, record.ExportFingerprint, StringComparison.Ordinal))
-                return NeedsExport("The export settings or export-scope policy changed since the last verified NWC.");
+                return NeedsExport("The source identity, output target, export settings, or export-scope policy changed since the last verified NWC.");
 
             if (job.IsCloud && !string.IsNullOrWhiteSpace(job.CloudVersionId))
             {
@@ -193,7 +202,7 @@ namespace ScheduledNwcExporter.Reliability
                     return NeedsExport("The ACC model tip version changed since the last verified NWC.");
                 }
 
-                return Current("ACC tip version, export settings, and output file match the last verified export.");
+                return Current("ACC tip version, output target, export settings, and output file match the last verified export.");
             }
 
             DateTime? sourceModifiedUtc = ExportStateStore.ResolveCurrentSourceModifiedUtc(job);
@@ -203,7 +212,7 @@ namespace ScheduledNwcExporter.Reliability
             if (sourceModifiedUtc.Value > record.SourceModifiedUtc.Value.AddSeconds(1))
                 return NeedsExport("The source model was modified after the last verified NWC.");
 
-            return Current("Source version, export settings, and output file match the last verified export.");
+            return Current("Source version, output target, export settings, and output file match the last verified export.");
         }
 
         private static FreshnessEvaluation NeedsExport(string reason)
@@ -221,13 +230,17 @@ namespace ScheduledNwcExporter.Reliability
     {
         private const string ExportScopeRevision = "NWC_SCOPE_2026_09_R1";
 
-        public static string Compute(ExportSettings settings)
+        public static string Compute(ModelExportJob job, ExportSettings settings)
         {
+            if (job == null) throw new ArgumentNullException(nameof(job));
             if (settings == null) throw new ArgumentNullException(nameof(settings));
 
             string canonical = string.Join("|", new[]
             {
                 "scope=" + ExportScopeRevision,
+                "source=" + Normalize(job.SourceModelPath),
+                "outputDirectory=" + NormalizePath(job.OutputDirectory),
+                "outputTemplate=" + Normalize(job.OutputFileNameTemplate),
                 "links=false",
                 "projectCad=false",
                 "familyCad=true",
@@ -257,6 +270,24 @@ namespace ScheduledNwcExporter.Reliability
                 var builder = new StringBuilder(hash.Length * 2);
                 foreach (byte value in hash) builder.Append(value.ToString("x2", CultureInfo.InvariantCulture));
                 return builder.ToString();
+            }
+        }
+
+        private static string Normalize(string value)
+        {
+            return (value ?? string.Empty).Trim();
+        }
+
+        private static string NormalizePath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return string.Empty;
+            try
+            {
+                return Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            }
+            catch
+            {
+                return path.Trim();
             }
         }
     }
