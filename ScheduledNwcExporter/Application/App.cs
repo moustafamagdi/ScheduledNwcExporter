@@ -10,7 +10,7 @@ namespace ScheduledNwcExporter.Application
     /// <summary>
     /// Revit external application entry point and owner of the modeless export manager window.
     /// </summary>
-        public class App : IExternalApplication
+    public class App : IExternalApplication
     {
         internal static MainWindow? ExportManagerWindow { get; set; }
         internal static Configuration.ConfigurationManager? ConfigManager { get; private set; }
@@ -18,33 +18,20 @@ namespace ScheduledNwcExporter.Application
         internal static Scheduler.ScheduleManager? Scheduler { get; private set; }
         internal static Revit.ExternalEvents.ExportQueueExternalEventHandler? QueueHandler { get; private set; }
         internal static ExternalEvent? QueueEvent { get; private set; }
+        private static bool _dialogHandlerSubscribed;
 
         public Result OnStartup(UIControlledApplication application)
         {
-            // Register assembly resolver to handle dependencies like Autodesk.Forge
             Core.AssemblyLoader.Register();
 
             try
             {
-                // AUDIT FIX: Initialize core services at App level to support unattended scheduling
-                ConfigManager = new Configuration.ConfigurationManager();
-                Logger = new Logging.FileLogger { DebugMode = ConfigManager.CurrentSettings.DebugMode };
-                
-                // Use current dispatcher (Revit main thread) for the queue handler
-                QueueHandler = new Revit.ExternalEvents.ExportQueueExternalEventHandler(
-                    Logger,
-                    ConfigManager.CurrentSettings,
-                    System.Windows.Threading.Dispatcher.CurrentDispatcher,
-                    ConfigManager);
-                QueueEvent = ExternalEvent.Create(QueueHandler);
-                QueueHandler.AttachExternalEvent(QueueEvent);
+                InitializeCoreServices();
 
-                Scheduler = new Scheduler.ScheduleManager(ConfigManager.CurrentSettings, Logger);
-                Scheduler.ScheduledTimeReached += OnScheduledTimeReached;
-                
-                if (ConfigManager.CurrentSettings.Scheduler.IsSchedulerEnabled)
+                if (!_dialogHandlerSubscribed)
                 {
-                    Scheduler.Start();
+                    application.DialogBoxShowing += UnattendedDialogHandler.OnDialogBoxShowing;
+                    _dialogHandlerSubscribed = true;
                 }
 
                 const string tabName = "Hatco";
@@ -54,10 +41,8 @@ namespace ScheduledNwcExporter.Application
                 }
                 catch
                 {
-                    // The tab may have been created by another add-in or an earlier load.
                 }
 
-                // Create or find panel safely to avoid conflicts with other Hatco add-ins
                 RibbonPanel panel = null;
                 foreach (var existingPanel in application.GetRibbonPanels(tabName))
                 {
@@ -98,18 +83,107 @@ namespace ScheduledNwcExporter.Application
             }
         }
 
-        private void OnScheduledTimeReached(object sender, EventArgs e)
+        /// <summary>
+        /// Makes direct loading through Revit Add-In Manager work as well as a normal .addin startup.
+        /// ExternalEvent.Create must happen inside a valid Revit API execution context, so the command
+        /// calls this method before constructing the modeless window.
+        /// </summary>
+        internal static void EnsureServicesInitialized(UIApplication uiApplication)
+        {
+            if (uiApplication == null) throw new ArgumentNullException(nameof(uiApplication));
+
+            InitializeCoreServices();
+
+            // Add-In Manager does not execute IExternalApplication.OnStartup when only the command
+            // class is loaded. UIApplication exposes the same dialog event and lets this test path
+            // retain unattended dialog handling without requiring a second application startup.
+            if (!_dialogHandlerSubscribed)
+            {
+                uiApplication.DialogBoxShowing += UnattendedDialogHandler.OnDialogBoxShowing;
+                _dialogHandlerSubscribed = true;
+            }
+        }
+
+        private static void InitializeCoreServices()
+        {
+            if (ConfigManager == null)
+            {
+                ConfigManager = new Configuration.ConfigurationManager();
+            }
+
+            if (Logger == null)
+            {
+                Logger = new Logging.FileLogger { DebugMode = ConfigManager.CurrentSettings.DebugMode };
+            }
+
+            NormalizeScheduleDays();
+
+            if (QueueHandler == null)
+            {
+                QueueHandler = new Revit.ExternalEvents.ExportQueueExternalEventHandler(
+                    Logger,
+                    ConfigManager.CurrentSettings,
+                    System.Windows.Threading.Dispatcher.CurrentDispatcher,
+                    ConfigManager);
+            }
+
+            if (QueueEvent == null)
+            {
+                // This method is called only from OnStartup or IExternalCommand.Execute: both are
+                // valid Revit API contexts for creating an ExternalEvent.
+                QueueEvent = ExternalEvent.Create(QueueHandler);
+                QueueHandler.AttachExternalEvent(QueueEvent);
+            }
+
+            if (Scheduler == null)
+            {
+                Scheduler = new Scheduler.ScheduleManager(ConfigManager.CurrentSettings, Logger);
+                Scheduler.ScheduledTimeReached += OnScheduledTimeReachedStatic;
+                if (ConfigManager.CurrentSettings.Scheduler.IsSchedulerEnabled)
+                {
+                    Scheduler.Start();
+                }
+            }
+        }
+
+        private static void NormalizeScheduleDays()
+        {
+            if (ConfigManager == null || Logger == null) return;
+
+            bool scheduleNormalized = false;
+            if (ConfigManager.CurrentSettings.Scheduler.Slots != null)
+            {
+                foreach (var slot in ConfigManager.CurrentSettings.Scheduler.Slots)
+                {
+                    var normalizedDays = (slot.Days ?? new List<DayOfWeek>())
+                        .Distinct()
+                        .OrderBy(d => d == DayOfWeek.Sunday ? 7 : (int)d)
+                        .ToList();
+
+                    if (slot.Days == null || !slot.Days.SequenceEqual(normalizedDays))
+                    {
+                        slot.Days = normalizedDays;
+                        scheduleNormalized = true;
+                    }
+                }
+            }
+
+            if (scheduleNormalized)
+            {
+                ConfigManager.SaveConfiguration();
+                Logger.Info("Scheduler", "Normalized duplicate schedule-day entries in configuration.");
+            }
+        }
+
+        private static void OnScheduledTimeReachedStatic(object sender, EventArgs e)
         {
             if (ConfigManager == null || QueueHandler == null || Logger == null) return;
 
-            // If the window is open, let the ViewModel handle it to update the UI
             if (ExportManagerWindow != null && ExportManagerWindow.IsVisible)
             {
-                // The ViewModel is already subscribed to this event in the current implementation
                 return;
             }
 
-            // AUDIT FIX: Unattended background run when window is closed
             var activeJobs = ConfigManager.CurrentSettings.Jobs.Where(j => j.IsEnabled).ToList();
             if (activeJobs.Count > 0)
             {
@@ -120,7 +194,18 @@ namespace ScheduledNwcExporter.Application
 
         public Result OnShutdown(UIControlledApplication application)
         {
-            Scheduler?.Stop();
+            if (_dialogHandlerSubscribed)
+            {
+                application.DialogBoxShowing -= UnattendedDialogHandler.OnDialogBoxShowing;
+                _dialogHandlerSubscribed = false;
+            }
+
+            if (Scheduler != null)
+            {
+                Scheduler.ScheduledTimeReached -= OnScheduledTimeReachedStatic;
+                Scheduler.Stop();
+            }
+
             Core.AssemblyLoader.Unregister();
 
             if (ExportManagerWindow != null)
@@ -130,6 +215,11 @@ namespace ScheduledNwcExporter.Application
             }
 
             QueueEvent?.Dispose();
+            QueueEvent = null;
+            QueueHandler = null;
+            Scheduler = null;
+            Logger = null;
+            ConfigManager = null;
 
             return Result.Succeeded;
         }

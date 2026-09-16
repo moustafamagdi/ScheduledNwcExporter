@@ -1,14 +1,11 @@
 using System;
 using System.IO;
 using Autodesk.Revit.DB;
+using Autodesk.Revit.DB.Events;
 using ScheduledNwcExporter.Logging;
 
 namespace ScheduledNwcExporter.Revit
 {
-    /// <summary>
-    /// Signals that Revit, the authority for cloud-model entitlement, denied the signed-in user.
-    /// The queue must not retry this condition because retrying re-enters Revit's native cloud-open UI.
-    /// </summary>
     public sealed class CloudModelAccessDeniedException : InvalidOperationException
     {
         public bool IsPermanentAccessDenial { get; }
@@ -22,6 +19,8 @@ namespace ScheduledNwcExporter.Revit
 
     /// <summary>
     /// Opens and closes source models for non-destructive export processing.
+    /// During the programmatic open only, known broken annotation-reference failures are
+    /// resolved with Revit's DetachElements resolution (the UI action shown as Remove Reference).
     /// </summary>
     public class DocumentManager
     {
@@ -32,18 +31,15 @@ namespace ScheduledNwcExporter.Revit
             _logger = logger;
         }
 
-        /// <summary>
-        /// Opens a Revit document in memory, detached from central where applicable, with all
-        /// user-created worksets configured to open before the document is loaded.
-        /// </summary>
         public Document? OpenModelDetached(Autodesk.Revit.ApplicationServices.Application app, string modelPath)
         {
             bool isCloud = modelPath.StartsWith("acc://", StringComparison.OrdinalIgnoreCase);
             string modelName = isCloud ? modelPath.Split('|')[0].Replace("acc://", "") : Path.GetFileName(modelPath);
 
+            EventHandler<FailuresProcessingEventArgs>? failureHandler = null;
+
             try
             {
-
                 if (!isCloud && !File.Exists(modelPath))
                 {
                     _logger.Error("Revit", $"Model file not found: {modelPath}", modelName, "Preflight");
@@ -57,7 +53,6 @@ namespace ScheduledNwcExporter.Revit
 
                 if (isCloud)
                 {
-                    // Format: acc://ModelName.rvt|Region|ProjectGUID|ModelGUID
                     string[] parts = modelPath.Split('|');
                     if (parts.Length < 4)
                     {
@@ -65,18 +60,12 @@ namespace ScheduledNwcExporter.Revit
                     }
 
                     string region = parts[1];
-                    // Strip "b." prefix if present as per expert advice
                     string cleanProjectGuid = parts[2].StartsWith("b.") ? parts[2].Substring(2) : parts[2];
-                    
                     Guid projectGuid = Guid.Parse(cleanProjectGuid);
                     Guid modelGuid = Guid.Parse(parts[3]);
 
                     _logger.Info("Revit", $"Resolving cloud path: Region={region}, Project={projectGuid}, Model={modelGuid}", modelName, "OpeningModel");
-                    
-                    // The official way to create a Cloud ModelPath in Revit API
                     revitModelPath = ModelPathUtils.ConvertCloudGUIDsToCloudPath(region, projectGuid, modelGuid);
-                    
-                    // EXPERT FIX: Open central directly as ReadOnly to avoid "Detached" permission issues in cloud.
                     openOptions.DetachFromCentralOption = DetachFromCentralOption.DoNotDetach;
                 }
                 else
@@ -85,11 +74,16 @@ namespace ScheduledNwcExporter.Revit
                     openOptions.DetachFromCentralOption = DetachFromCentralOption.DetachAndPreserveWorksets;
                 }
 
-                // EXPERT FIX for Revit 2024: Use WorksetConfiguration to open all worksets
                 var worksetConfiguration = new WorksetConfiguration(WorksetConfigurationOption.OpenAllWorksets);
                 openOptions.SetOpenWorksetsConfiguration(worksetConfiguration);
 
-                // This opens the document without activating it in Revit's user interface.
+                // OpenDocumentFile can raise Revit's native "Error - cannot be ignored" failure UI.
+                // Attach only for this unattended open and only resolve the narrow class of broken
+                // dimension/tag reference failures for which Revit offers DetachElements. In Revit's
+                // UI this resolution is labelled "Remove Reference" / "Remove References".
+                failureHandler = (sender, args) => HandleOpeningFailures(args, modelName);
+                app.FailuresProcessing += failureHandler;
+
                 Document doc = app.OpenDocumentFile(revitModelPath, openOptions);
 
                 _logger.Success("Revit", $"Successfully opened {(isCloud ? "cloud" : "detached")} document: {modelName}", modelName, "OpeningModel");
@@ -114,11 +108,78 @@ namespace ScheduledNwcExporter.Revit
 
                 return null;
             }
+            finally
+            {
+                if (failureHandler != null)
+                {
+                    app.FailuresProcessing -= failureHandler;
+                }
+            }
         }
 
-        /// <summary>
-        /// Closes an in-memory document without saving any changes.
-        /// </summary>
+        private void HandleOpeningFailures(FailuresProcessingEventArgs args, string modelName)
+        {
+            try
+            {
+                FailuresAccessor accessor = args.GetFailuresAccessor();
+                bool resolvedAny = false;
+
+                foreach (FailureMessageAccessor failure in accessor.GetFailureMessages())
+                {
+                    string description = failure.GetDescriptionText() ?? string.Empty;
+                    if (!IsBrokenAnnotationReferenceFailure(description))
+                        continue;
+
+                    // "Remove Reference" is represented by DetachElements: remove the invalid
+                    // relationship/reference while preserving the annotation where Revit can do so.
+                    if (!failure.HasResolutionOfType(FailureResolutionType.DetachElements))
+                    {
+                        _logger.Warning("Revit",
+                            $"Recognized broken annotation reference but Revit did not expose the Remove Reference (DetachElements) resolution: {description}",
+                            modelName, "OpeningFailures");
+                        continue;
+                    }
+
+                    failure.SetCurrentResolutionType(FailureResolutionType.DetachElements);
+                    accessor.ResolveFailure(failure);
+                    resolvedAny = true;
+
+                    _logger.Warning("Revit",
+                        $"Automatically applied Remove Reference while opening model: {description}",
+                        modelName, "OpeningFailures");
+                }
+
+                if (resolvedAny)
+                {
+                    args.SetProcessingResult(FailureProcessingResult.ProceedWithCommit);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Warning("Revit", $"Could not automatically process model-opening failures: {ex.Message}", modelName, "OpeningFailures", ex);
+            }
+        }
+
+        private static bool IsBrokenAnnotationReferenceFailure(string description)
+        {
+            string text = (description ?? string.Empty).ToLowerInvariant();
+
+            bool annotation = text.Contains("dimension") || text.Contains("tag") || text.Contains("reference");
+            bool brokenRelationship =
+                text.Contains("no longer parallel") ||
+                text.Contains("reference is no longer") ||
+                text.Contains("references are no longer") ||
+                text.Contains("reference is missing") ||
+                text.Contains("references are missing") ||
+                text.Contains("missing reference") ||
+                text.Contains("lost reference") ||
+                text.Contains("invalid reference") ||
+                text.Contains("references to elements have been lost") ||
+                text.Contains("references are or have become invalid");
+
+            return annotation && brokenRelationship;
+        }
+
         public void CloseDocumentSafely(Document? doc)
         {
             if (doc == null) return;
