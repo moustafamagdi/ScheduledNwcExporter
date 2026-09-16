@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 using Autodesk.Revit.UI;
 using ScheduledNwcExporter.Reliability;
 using ScheduledNwcExporter.UI.Views;
@@ -20,6 +21,7 @@ namespace ScheduledNwcExporter.Application
         internal static Revit.ExternalEvents.ExportQueueExternalEventHandler? QueueHandler { get; private set; }
         internal static ExternalEvent? QueueEvent { get; private set; }
         private static bool _dialogHandlerSubscribed;
+        private static bool _scheduledSelectionInProgress;
 
         public Result OnStartup(UIControlledApplication application)
         {
@@ -96,9 +98,6 @@ namespace ScheduledNwcExporter.Application
 
         private static void InitializeCoreServices()
         {
-            // Create one logger for the entire Revit session and inject it into configuration and
-            // downstream services. This prevents one add-in session from fragmenting diagnostics
-            // across multiple unrelated log files.
             if (Logger == null)
                 Logger = new Logging.FileLogger();
 
@@ -106,7 +105,6 @@ namespace ScheduledNwcExporter.Application
                 ConfigManager = new Configuration.ConfigurationManager(Logger);
 
             Logger.DebugMode = ConfigManager.CurrentSettings.DebugMode;
-
             NormalizeScheduleDays();
 
             if (QueueHandler == null)
@@ -162,7 +160,7 @@ namespace ScheduledNwcExporter.Application
             }
         }
 
-        private static void OnScheduledTimeReachedStatic(object sender, EventArgs e)
+        private static async void OnScheduledTimeReachedStatic(object sender, EventArgs e)
         {
             if (ConfigManager == null || QueueHandler == null || Logger == null) return;
 
@@ -171,19 +169,96 @@ namespace ScheduledNwcExporter.Application
             if (ExportManagerWindow != null && ExportManagerWindow.IsVisible)
                 return;
 
-            var activeJobs = ConfigManager.CurrentSettings.Jobs
-                .Where(job => job.IsEnabled && FreshnessEvaluator.Evaluate(job, ConfigManager.CurrentSettings).NeedsExport)
-                .ToList();
+            if (QueueHandler.IsSessionRunning)
+            {
+                Logger.Warning("Scheduler", "Scheduled export was skipped because another export session is already running.");
+                return;
+            }
 
-            if (activeJobs.Count > 0)
+            if (_scheduledSelectionInProgress)
             {
-                Logger.Info("Scheduler", $"Starting unattended scheduled export of {activeJobs.Count} stale/unverified model(s).");
-                QueueHandler.Start(activeJobs, Revit.ExternalEvents.SessionTriggerSource.Scheduler);
+                Logger.Warning("Scheduler", "Scheduled selection is already refreshing cloud metadata; duplicate trigger ignored.");
+                return;
             }
-            else
+
+            _scheduledSelectionInProgress = true;
+            try
             {
-                Logger.Info("Scheduler", "Scheduled time reached, but no enabled model currently requires a verified export.");
+                await RefreshCloudMetadataForScheduledRunAsync();
+
+                if (ConfigManager == null || QueueHandler == null || Logger == null) return;
+
+                var activeJobs = ConfigManager.CurrentSettings.Jobs
+                    .Where(job => job.IsEnabled && FreshnessEvaluator.Evaluate(job, ConfigManager.CurrentSettings).NeedsExport)
+                    .ToList();
+
+                if (activeJobs.Count > 0)
+                {
+                    Logger.Info("Scheduler", $"Starting unattended scheduled export of {activeJobs.Count} stale/unverified model(s).");
+                    QueueHandler.Start(activeJobs, Revit.ExternalEvents.SessionTriggerSource.Scheduler);
+                }
+                else
+                {
+                    Logger.Info("Scheduler", "Scheduled time reached, but no enabled model currently requires a verified export.");
+                }
             }
+            catch (Exception ex)
+            {
+                Logger?.Error("Scheduler", $"Could not prepare the scheduled export selection: {ex.Message}", string.Empty, "FreshnessSelection", ex);
+            }
+            finally
+            {
+                _scheduledSelectionInProgress = false;
+            }
+        }
+
+        private static async Task RefreshCloudMetadataForScheduledRunAsync()
+        {
+            if (ConfigManager == null || Logger == null) return;
+
+            var cloudJobs = ConfigManager.CurrentSettings.Jobs
+                .Where(job => job.IsEnabled && job.IsCloud)
+                .ToList();
+            if (cloudJobs.Count == 0) return;
+
+            string accessToken = Core.CloudAuthenticationService.GetAccessToken();
+            if (string.IsNullOrWhiteSpace(accessToken))
+            {
+                foreach (var job in cloudJobs)
+                    job.SourceMetadataError = "No Autodesk session is available to verify the current ACC version before the scheduled run.";
+
+                ConfigManager.SaveConfiguration();
+                Logger.Warning("Scheduler", "ACC metadata refresh could not run because no Autodesk session token was available. Cloud jobs remain conservatively unverified.", string.Empty, "FreshnessSelection");
+                return;
+            }
+
+            var apsClient = new Core.APSClient(accessToken, Logger);
+            foreach (var job in cloudJobs)
+            {
+                if (string.IsNullOrWhiteSpace(job.CloudDataProjectId) || string.IsNullOrWhiteSpace(job.CloudItemId))
+                {
+                    job.SourceMetadataError = "ACC identifiers are missing. Re-select this model in Cloud Explorer to enable version-aware freshness checks.";
+                    continue;
+                }
+
+                try
+                {
+                    Core.CloudItemMetadata metadata = await apsClient.GetLatestItemMetadataAsync(job.CloudDataProjectId, job.CloudItemId);
+                    job.LastSourceModifiedUtc = metadata.LastModifiedUtc;
+                    job.LastMetadataRefreshUtc = DateTime.UtcNow;
+                    job.CloudVersionId = metadata.VersionId;
+                    job.SourceMetadataError = !string.IsNullOrWhiteSpace(metadata.VersionId) || metadata.LastModifiedUtc.HasValue
+                        ? string.Empty
+                        : "APS did not return a version or modification date for this ACC item.";
+                }
+                catch (Exception ex)
+                {
+                    job.SourceMetadataError = $"Could not refresh ACC metadata before scheduled export: {ex.Message}";
+                    Logger.Warning("Scheduler", job.SourceMetadataError, job.DisplaySourcePath, "FreshnessSelection", ex);
+                }
+            }
+
+            ConfigManager.SaveConfiguration();
         }
 
         public Result OnShutdown(UIControlledApplication application)
@@ -214,6 +289,7 @@ namespace ScheduledNwcExporter.Application
             Scheduler = null;
             ConfigManager = null;
             Logger = null;
+            _scheduledSelectionInProgress = false;
 
             return Result.Succeeded;
         }
