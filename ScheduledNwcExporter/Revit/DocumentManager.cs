@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Events;
+using ScheduledNwcExporter.Application;
 using ScheduledNwcExporter.Logging;
 
 namespace ScheduledNwcExporter.Revit
@@ -19,8 +20,8 @@ namespace ScheduledNwcExporter.Revit
 
     /// <summary>
     /// Opens and closes source models for non-destructive export processing.
-    /// During the programmatic open only, known broken annotation-reference failures are
-    /// resolved with Revit's DetachElements resolution (the UI action shown as Remove Reference).
+    /// During programmatic open, narrowly-approved failure resolutions are delegated to the
+    /// centralized unattended policy registry.
     /// </summary>
     public class DocumentManager
     {
@@ -35,7 +36,6 @@ namespace ScheduledNwcExporter.Revit
         {
             bool isCloud = modelPath.StartsWith("acc://", StringComparison.OrdinalIgnoreCase);
             string modelName = isCloud ? modelPath.Split('|')[0].Replace("acc://", "") : Path.GetFileName(modelPath);
-
             EventHandler<FailuresProcessingEventArgs>? failureHandler = null;
 
             try
@@ -77,10 +77,6 @@ namespace ScheduledNwcExporter.Revit
                 var worksetConfiguration = new WorksetConfiguration(WorksetConfigurationOption.OpenAllWorksets);
                 openOptions.SetOpenWorksetsConfiguration(worksetConfiguration);
 
-                // OpenDocumentFile can raise Revit's native "Error - cannot be ignored" failure UI.
-                // Attach only for this unattended open and only resolve the narrow class of broken
-                // dimension/tag reference failures for which Revit offers DetachElements. In Revit's
-                // UI this resolution is labelled "Remove Reference" / "Remove References".
                 failureHandler = (sender, args) => HandleOpeningFailures(args, modelName);
                 app.FailuresProcessing += failureHandler;
 
@@ -111,9 +107,7 @@ namespace ScheduledNwcExporter.Revit
             finally
             {
                 if (failureHandler != null)
-                {
                     app.FailuresProcessing -= failureHandler;
-                }
             }
         }
 
@@ -127,16 +121,25 @@ namespace ScheduledNwcExporter.Revit
                 foreach (FailureMessageAccessor failure in accessor.GetFailureMessages())
                 {
                     string description = failure.GetDescriptionText() ?? string.Empty;
-                    if (!IsBrokenAnnotationReferenceFailure(description))
-                        continue;
+                    string failureId = UnattendedPolicyRegistry.GetFailureDefinitionIdText(failure);
 
-                    // "Remove Reference" is represented by DetachElements: remove the invalid
-                    // relationship/reference while preserving the annotation where Revit can do so.
+                    if (!UnattendedPolicyRegistry.ShouldDetachBrokenReference(failure, out string policyMatch))
+                    {
+                        _logger.Debug(
+                            "Revit",
+                            $"Opening failure left untouched. FailureDefinitionId='{failureId}', Description='{description}'.",
+                            modelName,
+                            "OpeningFailures");
+                        continue;
+                    }
+
                     if (!failure.HasResolutionOfType(FailureResolutionType.DetachElements))
                     {
-                        _logger.Warning("Revit",
-                            $"Recognized broken annotation reference but Revit did not expose the Remove Reference (DetachElements) resolution: {description}",
-                            modelName, "OpeningFailures");
+                        _logger.Warning(
+                            "Revit",
+                            $"Recognized broken annotation reference but DetachElements is unavailable. FailureDefinitionId='{failureId}', Match='{policyMatch}', Description='{description}'.",
+                            modelName,
+                            "OpeningFailures");
                         continue;
                     }
 
@@ -144,40 +147,20 @@ namespace ScheduledNwcExporter.Revit
                     accessor.ResolveFailure(failure);
                     resolvedAny = true;
 
-                    _logger.Warning("Revit",
-                        $"Automatically applied Remove Reference while opening model: {description}",
-                        modelName, "OpeningFailures");
+                    _logger.Warning(
+                        "Revit",
+                        $"Automatically applied Remove Reference. FailureDefinitionId='{failureId}', Match='{policyMatch}', Description='{description}'.",
+                        modelName,
+                        "OpeningFailures");
                 }
 
                 if (resolvedAny)
-                {
                     args.SetProcessingResult(FailureProcessingResult.ProceedWithCommit);
-                }
             }
             catch (Exception ex)
             {
                 _logger.Warning("Revit", $"Could not automatically process model-opening failures: {ex.Message}", modelName, "OpeningFailures", ex);
             }
-        }
-
-        private static bool IsBrokenAnnotationReferenceFailure(string description)
-        {
-            string text = (description ?? string.Empty).ToLowerInvariant();
-
-            bool annotation = text.Contains("dimension") || text.Contains("tag") || text.Contains("reference");
-            bool brokenRelationship =
-                text.Contains("no longer parallel") ||
-                text.Contains("reference is no longer") ||
-                text.Contains("references are no longer") ||
-                text.Contains("reference is missing") ||
-                text.Contains("references are missing") ||
-                text.Contains("missing reference") ||
-                text.Contains("lost reference") ||
-                text.Contains("invalid reference") ||
-                text.Contains("references to elements have been lost") ||
-                text.Contains("references are or have become invalid");
-
-            return annotation && brokenRelationship;
         }
 
         public void CloseDocumentSafely(Document? doc)
