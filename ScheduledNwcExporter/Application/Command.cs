@@ -20,6 +20,7 @@ namespace ScheduledNwcExporter.Application
                 if (App.ExportManagerWindow == null || !App.ExportManagerWindow.IsVisible)
                 {
                     var window = new MainWindow();
+                    UI.RemoveConfirmationBehavior.Attach(window);
                     window.Closed += (_, __) => App.ExportManagerWindow = null;
                     App.ExportManagerWindow = window;
                     window.Show();
