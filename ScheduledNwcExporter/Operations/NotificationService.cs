@@ -24,17 +24,47 @@ namespace ScheduledNwcExporter.Operations
             if (summary == null) return;
 
             bool hasFailure = summary.Failed > 0 || !string.IsNullOrWhiteSpace(summary.SessionError);
-            bool shouldNotify = hasFailure || summary.TriggerSource == SessionTriggerSource.Scheduler;
-            if (!shouldNotify) return;
+            bool wasCancelled = summary.Cancelled > 0;
+            bool isScheduled = summary.TriggerSource == SessionTriggerSource.Scheduler;
 
-            string title = hasFailure ? "Hatco NWC Exporter - Attention" : "Hatco NWC Exporter - Completed";
-            string text = hasFailure
-                ? $"Batch {summary.SessionId}: {summary.Failed} failed, {summary.Successful} successful."
-                : $"Scheduled batch completed: {summary.Successful} successful, {summary.Skipped} skipped.";
+            string title;
+            ToolTipIcon icon;
+
+            if (hasFailure)
+            {
+                title = "Hatco NWC Exporter - Attention";
+                icon = ToolTipIcon.Warning;
+            }
+            else if (wasCancelled)
+            {
+                title = "Hatco NWC Exporter - Cancelled";
+                icon = ToolTipIcon.Info;
+            }
+            else
+            {
+                title = "Hatco NWC Exporter - Completed";
+                icon = ToolTipIcon.Info;
+            }
+
+            string triggerLabel = isScheduled ? "Scheduled batch" : "Manual batch";
+            string text;
+
+            if (hasFailure)
+            {
+                text = $"{triggerLabel} finished: {summary.Successful} successful, {summary.Failed} failed, {summary.Skipped} skipped.";
+            }
+            else if (wasCancelled)
+            {
+                text = $"{triggerLabel} stopped: {summary.Successful} successful, {summary.Cancelled} cancelled.";
+            }
+            else
+            {
+                text = $"{triggerLabel} completed: {summary.Successful} successful, {summary.Skipped} skipped.";
+            }
 
             _notifyIcon.BalloonTipTitle = title;
             _notifyIcon.BalloonTipText = text;
-            _notifyIcon.BalloonTipIcon = hasFailure ? ToolTipIcon.Warning : ToolTipIcon.Info;
+            _notifyIcon.BalloonTipIcon = icon;
             _notifyIcon.ShowBalloonTip(7000);
         }
 
