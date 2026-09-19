@@ -73,6 +73,39 @@ namespace ScheduledNwcExporter.Application
             return null;
         }
 
+
+        public static bool ShouldDeleteBrokenDimension(FailureMessageAccessor failure, out string policyMatch)
+        {
+            policyMatch = string.Empty;
+            if (failure == null) return false;
+
+            try
+            {
+                FailureDefinitionId definitionId = failure.GetFailureDefinitionId();
+                if (definitionId != null &&
+                    definitionId.Equals(BuiltInFailures.DimensionFailures.RadialDimensionCannotProjectToArc))
+                {
+                    policyMatch = "BuiltInFailures.DimensionFailures.RadialDimensionCannotProjectToArc";
+                    return true;
+                }
+            }
+            catch
+            {
+                // Fall back to the exact failure text if the definition id is unavailable.
+            }
+
+            string description = failure.GetDescriptionText() ?? string.Empty;
+            if (description.IndexOf("cannot form radial dimension", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                description.IndexOf("can't form radial dimension", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                policyMatch = "RadialDimensionDescriptionFallback";
+                return true;
+            }
+
+            return false;
+        }
+
+
         public static bool ShouldDetachBrokenReference(FailureMessageAccessor failure, out string policyMatch)
         {
             policyMatch = string.Empty;
