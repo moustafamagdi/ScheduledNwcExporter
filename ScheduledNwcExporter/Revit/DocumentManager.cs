@@ -123,6 +123,30 @@ namespace ScheduledNwcExporter.Revit
                     string description = failure.GetDescriptionText() ?? string.Empty;
                     string failureId = UnattendedPolicyRegistry.GetFailureDefinitionIdText(failure);
 
+                    if (UnattendedPolicyRegistry.ShouldDeleteBrokenDimension(failure, out string deletePolicyMatch))
+                    {
+                        if (!accessor.IsFailureResolutionPermitted(failure, FailureResolutionType.DeleteElements))
+                        {
+                            _logger.Warning(
+                                "Revit",
+                                $"Recognized invalid radial dimension but DeleteElements is unavailable. FailureDefinitionId='{failureId}', Match='{deletePolicyMatch}', Description='{description}'.",
+                                modelName,
+                                "OpeningFailures");
+                            continue;
+                        }
+
+                        failure.SetCurrentResolutionType(FailureResolutionType.DeleteElements);
+                        accessor.ResolveFailure(failure);
+                        resolvedAny = true;
+
+                        _logger.Warning(
+                            "Revit",
+                            $"Automatically applied Delete Dimension(s). FailureDefinitionId='{failureId}', Match='{deletePolicyMatch}', Description='{description}'.",
+                            modelName,
+                            "OpeningFailures");
+                        continue;
+                    }
+
                     if (!UnattendedPolicyRegistry.ShouldDetachBrokenReference(failure, out string policyMatch))
                     {
                         _logger.Debug(
