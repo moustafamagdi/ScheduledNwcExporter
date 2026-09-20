@@ -37,6 +37,17 @@ namespace ScheduledNwcExporter.Application
 
             string probe = (dialogId + " " + (message ?? string.Empty)).ToLowerInvariant();
 
+            // Revit import prompt shown when the selected DWG has no usable Paper Space
+            // elements and asks whether to continue from Model Space. During an unattended
+            // export/open session the safe continuation is Yes; choosing No only aborts that
+            // import path and can leave the model-open sequence blocked for automation.
+            if (args is TaskDialogShowingEventArgs &&
+                probe.Contains("import detected no valid elements in the file's paper space") &&
+                probe.Contains("import from the model space"))
+            {
+                return (int)TaskDialogResult.Yes;
+            }
+
             if (ContainsAny(probe,
                 "far from the origin",
                 "large coordinate",
