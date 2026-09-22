@@ -30,7 +30,12 @@ namespace ScheduledNwcExporter.UI.Views
             if (reason.IndexOf("tip version changed", StringComparison.OrdinalIgnoreCase) >= 0)
                 return "▲ ACC updated" + modified;
             if (reason.IndexOf("modified after", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                if (job.ExportLag.HasValue && job.ExportLag.Value.TotalMinutes > 0)
+                    return "▲ Update NWC · " + FormatElapsedDuration(job.ExportLag.Value);
+
                 return "▲ Update NWC" + modified;
+            }
             if (reason.IndexOf("no longer exists", StringComparison.OrdinalIgnoreCase) >= 0 ||
                 reason.IndexOf("output is empty", StringComparison.OrdinalIgnoreCase) >= 0 ||
                 reason.IndexOf("output cannot be verified", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -42,6 +47,31 @@ namespace ScheduledNwcExporter.UI.Views
                 return "▲ Config changed";
 
             return "▲ Needs export" + modified;
+        }
+
+        private static string FormatElapsedDuration(TimeSpan duration)
+        {
+            if (duration.TotalDays >= 60)
+            {
+                int months = Math.Max(1, (int)Math.Floor(duration.TotalDays / 30));
+                return months == 1 ? "1 month" : months + " months";
+            }
+
+            if (duration.TotalDays >= 1)
+            {
+                int days = (int)Math.Floor(duration.TotalDays);
+                int hours = duration.Hours;
+                return hours > 0 ? $"{days}d {hours}h" : $"{days}d";
+            }
+
+            if (duration.TotalHours >= 1)
+            {
+                int hours = (int)Math.Floor(duration.TotalHours);
+                int minutes = duration.Minutes;
+                return minutes > 0 ? $"{hours}h {minutes}m" : $"{hours}h";
+            }
+
+            return Math.Max(1, (int)Math.Floor(duration.TotalMinutes)) + "m";
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)

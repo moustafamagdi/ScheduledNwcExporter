@@ -37,6 +37,27 @@ namespace ScheduledNwcExporter.Application
 
             string probe = (dialogId + " " + (message ?? string.Empty)).ToLowerInvariant();
 
+            // Revit import prompt shown when the selected DWG has no usable Paper Space
+            // elements and asks whether to continue from Model Space. During an unattended
+            // export/open session the safe continuation is Yes; choosing No only aborts that
+            // import path and can leave the model-open sequence blocked for automation.
+            if (args is TaskDialogShowingEventArgs &&
+                probe.Contains("import detected no valid elements in the file's paper space") &&
+                probe.Contains("import from the model space"))
+            {
+                return (int)TaskDialogResult.Yes;
+            }
+
+            // Informational DWG import dialog. Revit has already truncated the invalid
+            // numeric values, so the only available action is Close. Auto-close it during an
+            // unattended export/open session so the queue can continue.
+            if (args is TaskDialogShowingEventArgs &&
+                probe.Contains("some numerical data within the imported file was out of range") &&
+                probe.Contains("this numerical data has been truncated"))
+            {
+                return (int)TaskDialogResult.Close;
+            }
+
             if (ContainsAny(probe,
                 "far from the origin",
                 "large coordinate",
@@ -72,6 +93,39 @@ namespace ScheduledNwcExporter.Application
 
             return null;
         }
+
+
+        public static bool ShouldDeleteBrokenDimension(FailureMessageAccessor failure, out string policyMatch)
+        {
+            policyMatch = string.Empty;
+            if (failure == null) return false;
+
+            try
+            {
+                FailureDefinitionId definitionId = failure.GetFailureDefinitionId();
+                if (definitionId != null &&
+                    definitionId.Equals(BuiltInFailures.DimensionFailures.RadialDimensionCannotProjectToArc))
+                {
+                    policyMatch = "BuiltInFailures.DimensionFailures.RadialDimensionCannotProjectToArc";
+                    return true;
+                }
+            }
+            catch
+            {
+                // Fall back to the exact failure text if the definition id is unavailable.
+            }
+
+            string description = failure.GetDescriptionText() ?? string.Empty;
+            if (description.IndexOf("cannot form radial dimension", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                description.IndexOf("can't form radial dimension", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                policyMatch = "RadialDimensionDescriptionFallback";
+                return true;
+            }
+
+            return false;
+        }
+
 
         public static bool ShouldDetachBrokenReference(FailureMessageAccessor failure, out string policyMatch)
         {
