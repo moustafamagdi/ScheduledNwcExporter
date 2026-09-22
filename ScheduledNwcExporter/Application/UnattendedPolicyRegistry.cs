@@ -48,6 +48,16 @@ namespace ScheduledNwcExporter.Application
                 return (int)TaskDialogResult.Yes;
             }
 
+            // Informational DWG import dialog. Revit has already truncated the invalid
+            // numeric values, so the only available action is Close. Auto-close it during an
+            // unattended export/open session so the queue can continue.
+            if (args is TaskDialogShowingEventArgs &&
+                probe.Contains("some numerical data within the imported file was out of range") &&
+                probe.Contains("this numerical data has been truncated"))
+            {
+                return (int)TaskDialogResult.Close;
+            }
+
             if (ContainsAny(probe,
                 "far from the origin",
                 "large coordinate",
