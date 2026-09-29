@@ -154,7 +154,12 @@ namespace ScheduledNwcExporter.Queue
                 }
 
                 if (!exportResult.Succeeded || !exportResult.WroteOutput)
-                    throw new InvalidOperationException("The NWC exporter did not create a valid output file.");
+                {
+                    string exportError = string.IsNullOrWhiteSpace(exportResult.ErrorMessage)
+                        ? "The NWC exporter did not create a valid output file."
+                        : exportResult.ErrorMessage;
+                    throw new IOException(exportError);
+                }
 
                 result.Succeeded = true;
                 result.OutputWritten = true;
