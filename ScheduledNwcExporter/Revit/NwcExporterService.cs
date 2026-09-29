@@ -17,6 +17,7 @@ namespace ScheduledNwcExporter.Revit
     {
         public NwcExportOutcome Outcome { get; set; }
         public string OutputPath { get; set; } = string.Empty;
+        public string ErrorMessage { get; set; } = string.Empty;
         public bool Succeeded => Outcome != NwcExportOutcome.Failed;
         public bool WroteOutput => Outcome == NwcExportOutcome.Exported;
     }
@@ -82,6 +83,18 @@ namespace ScheduledNwcExporter.Revit
                     }
                     else
                     {
+                        if (!CanOpenExistingOutputForOverwrite(fullOutputPath, out string writeIssue))
+                        {
+                            string message = $"Existing NWC cannot be opened for writing: {fullOutputPath}. {writeIssue}";
+                            _logger.Warning("Export", message, modelName, "OutputLocked");
+                            return new NwcExportResult
+                            {
+                                Outcome = NwcExportOutcome.Failed,
+                                OutputPath = fullOutputPath,
+                                ErrorMessage = message
+                            };
+                        }
+
                         _logger.Info("Export", $"Existing output will be overwritten: {fullOutputPath}", modelName, "Exporting");
                     }
                 }
@@ -135,14 +148,14 @@ namespace ScheduledNwcExporter.Revit
                 if (!File.Exists(fullOutputPath))
                 {
                     _logger.Error("Export", $"Export completed without creating the expected output file: {fullOutputPath}", modelName, "VerifyingOutput");
-                    return new NwcExportResult { Outcome = NwcExportOutcome.Failed, OutputPath = fullOutputPath };
+                    return new NwcExportResult { Outcome = NwcExportOutcome.Failed, OutputPath = fullOutputPath, ErrorMessage = $"Export completed without creating the expected output file: {fullOutputPath}" };
                 }
 
                 var outputInfo = new FileInfo(fullOutputPath);
                 if (outputInfo.Length <= 0)
                 {
                     _logger.Error("Export", $"Export created an empty NWC output file: {fullOutputPath}", modelName, "VerifyingOutput");
-                    return new NwcExportResult { Outcome = NwcExportOutcome.Failed, OutputPath = fullOutputPath };
+                    return new NwcExportResult { Outcome = NwcExportOutcome.Failed, OutputPath = fullOutputPath, ErrorMessage = $"Export created an empty NWC output file: {fullOutputPath}" };
                 }
 
                 _logger.Success("Export", $"NWC file created successfully. Size: {outputInfo.Length / (1024d * 1024d):F2} MB; path: {fullOutputPath}", modelName, "VerifyingOutput");
@@ -151,7 +164,39 @@ namespace ScheduledNwcExporter.Revit
             catch (Exception ex)
             {
                 _logger.Error("Export", $"Exception during NWC export: {ex.Message}", modelName, "Exporting", ex);
-                return new NwcExportResult { Outcome = NwcExportOutcome.Failed };
+                return new NwcExportResult { Outcome = NwcExportOutcome.Failed, ErrorMessage = ex.Message };
+            }
+        }
+
+        private static bool CanOpenExistingOutputForOverwrite(string path, out string issue)
+        {
+            issue = string.Empty;
+            try
+            {
+                FileAttributes attributes = File.GetAttributes(path);
+                if ((attributes & FileAttributes.ReadOnly) == FileAttributes.ReadOnly)
+                {
+                    issue = "The file is marked read-only.";
+                    return false;
+                }
+
+                using (var stream = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                {
+                    // Acquiring an exclusive read/write handle is enough to prove that the
+                    // Navisworks exporter can replace the current file without showing its
+                    // modal 'Can't open ... for writing' dialog.
+                }
+                return true;
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                issue = "Access was denied. " + ex.Message;
+                return false;
+            }
+            catch (IOException ex)
+            {
+                issue = "The file is probably open or locked by Navisworks, another user, or another process. " + ex.Message;
+                return false;
             }
         }
     }
