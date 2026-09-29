@@ -113,11 +113,19 @@ namespace ScheduledNwcExporter.Application
             try
             {
                 FailureDefinitionId definitionId = failure.GetFailureDefinitionId();
-                if (definitionId != null &&
-                    definitionId.Equals(BuiltInFailures.DimensionFailures.RadialDimensionCannotProjectToArc))
+                if (definitionId != null)
                 {
-                    policyMatch = "BuiltInFailures.DimensionFailures.RadialDimensionCannotProjectToArc";
-                    return true;
+                    if (definitionId.Equals(BuiltInFailures.DimensionFailures.RadialDimensionCannotProjectToArc))
+                    {
+                        policyMatch = "BuiltInFailures.DimensionFailures.RadialDimensionCannotProjectToArc";
+                        return true;
+                    }
+
+                    if (definitionId.Equals(BuiltInFailures.DimensionFailures.DimensionPerpendicularToView))
+                    {
+                        policyMatch = "BuiltInFailures.DimensionFailures.DimensionPerpendicularToView";
+                        return true;
+                    }
                 }
             }
             catch
@@ -130,6 +138,13 @@ namespace ScheduledNwcExporter.Application
                 description.IndexOf("can't form radial dimension", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 policyMatch = "RadialDimensionDescriptionFallback";
+                return true;
+            }
+
+            if (description.IndexOf("dimension is perpendicular to the current view", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                description.IndexOf("no longer valid", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                policyMatch = "DimensionPerpendicularToViewDescriptionFallback";
                 return true;
             }
 
