@@ -37,6 +37,16 @@ namespace ScheduledNwcExporter.Application
 
             string probe = (dialogId + " " + (message ?? string.Empty)).ToLowerInvariant();
 
+            // Navisworks exporter modal shown when the target NWC is already locked/open.
+            // The exporter cannot continue from this dialog; acknowledge it so the current
+            // attempt can fail and enter the normal non-blocking retry pipeline.
+            if (probe.Contains(".nwc") &&
+                probe.Contains("can't open") &&
+                probe.Contains("for writing"))
+            {
+                return (int)TaskDialogResult.Ok;
+            }
+
             // Revit import prompt shown when the selected DWG has no usable Paper Space
             // elements and asks whether to continue from Model Space. During an unattended
             // export/open session the safe continuation is Yes; choosing No only aborts that
