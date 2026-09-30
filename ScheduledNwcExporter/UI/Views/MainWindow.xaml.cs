@@ -47,6 +47,7 @@ namespace ScheduledNwcExporter.UI.Views
                 _viewModel = new MainViewModel(App.ConfigManager ?? new ConfigurationManager(_logger), _logger, _exportQueueHandler, App.Scheduler);
                 DataContext = _viewModel;
                 Closed += MainWindow_Closed;
+                PreviewKeyDown += MainWindow_PreviewKeyDown;
 
                 RegisterSafeEventHandlers();
                 RegisterRunSelectionTracking();
@@ -142,6 +143,25 @@ namespace ScheduledNwcExporter.UI.Views
             {
                 MessageBox.Show($"Could not open the report:\n{ex.Message}", "Hatco NWC Exporter", MessageBoxButton.OK, MessageBoxImage.Error);
             }
+        }
+
+        private void MainWindow_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (e.Key != System.Windows.Input.Key.Escape)
+                return;
+
+            // Escape is intentionally ignored while an operation is active. It must never
+            // cancel a queue, close the manager mid-export, or interrupt a metadata refresh.
+            if (_exportQueueHandler.IsSessionRunning || _viewModel.IsRefreshingModelDates)
+            {
+                e.Handled = true;
+                _logger?.Debug("UI", "Escape ignored because an operation is currently running.", string.Empty, "SafeClose");
+                return;
+            }
+
+            e.Handled = true;
+            _logger?.Info("UI", "Manager closed with Escape while idle.", string.Empty, "SafeClose");
+            Close();
         }
 
         private void Dispatcher_UnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
@@ -268,6 +288,7 @@ namespace ScheduledNwcExporter.UI.Views
             try
             {
                 Dispatcher.UnhandledException -= Dispatcher_UnhandledException;
+                PreviewKeyDown -= MainWindow_PreviewKeyDown;
                 _viewModel.Jobs.CollectionChanged -= Jobs_CollectionChanged;
                 foreach (ModelExportJob job in _viewModel.Jobs)
                     job.PropertyChanged -= RunSelectionJob_PropertyChanged;
