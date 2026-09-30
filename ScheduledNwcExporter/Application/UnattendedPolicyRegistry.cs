@@ -37,6 +37,37 @@ namespace ScheduledNwcExporter.Application
 
             string probe = (dialogId + " " + (message ?? string.Empty)).ToLowerInvariant();
 
+            // Navisworks exporter modal shown when the target NWC is already locked/open.
+            // The exporter cannot continue from this dialog; acknowledge it so the current
+            // attempt can fail and enter the normal non-blocking retry pipeline.
+            if (probe.Contains(".nwc") &&
+                probe.Contains("can't open") &&
+                probe.Contains("for writing"))
+            {
+                return (int)TaskDialogResult.Ok;
+            }
+
+            // Revit import prompt shown when the selected DWG has no usable Paper Space
+            // elements and asks whether to continue from Model Space. During an unattended
+            // export/open session the safe continuation is Yes; choosing No only aborts that
+            // import path and can leave the model-open sequence blocked for automation.
+            if (args is TaskDialogShowingEventArgs &&
+                probe.Contains("import detected no valid elements in the file's paper space") &&
+                probe.Contains("import from the model space"))
+            {
+                return (int)TaskDialogResult.Yes;
+            }
+
+            // Informational DWG import dialog. Revit has already truncated the invalid
+            // numeric values, so the only available action is Close. Auto-close it during an
+            // unattended export/open session so the queue can continue.
+            if (args is TaskDialogShowingEventArgs &&
+                probe.Contains("some numerical data within the imported file was out of range") &&
+                probe.Contains("this numerical data has been truncated"))
+            {
+                return (int)TaskDialogResult.Close;
+            }
+
             if (ContainsAny(probe,
                 "far from the origin",
                 "large coordinate",
@@ -72,6 +103,54 @@ namespace ScheduledNwcExporter.Application
 
             return null;
         }
+
+
+        public static bool ShouldDeleteBrokenDimension(FailureMessageAccessor failure, out string policyMatch)
+        {
+            policyMatch = string.Empty;
+            if (failure == null) return false;
+
+            try
+            {
+                FailureDefinitionId definitionId = failure.GetFailureDefinitionId();
+                if (definitionId != null)
+                {
+                    if (definitionId.Equals(BuiltInFailures.DimensionFailures.RadialDimensionCannotProjectToArc))
+                    {
+                        policyMatch = "BuiltInFailures.DimensionFailures.RadialDimensionCannotProjectToArc";
+                        return true;
+                    }
+
+                    if (definitionId.Equals(BuiltInFailures.DimensionFailures.DimensionPerpendicularToView))
+                    {
+                        policyMatch = "BuiltInFailures.DimensionFailures.DimensionPerpendicularToView";
+                        return true;
+                    }
+                }
+            }
+            catch
+            {
+                // Fall back to the exact failure text if the definition id is unavailable.
+            }
+
+            string description = failure.GetDescriptionText() ?? string.Empty;
+            if (description.IndexOf("cannot form radial dimension", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                description.IndexOf("can't form radial dimension", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                policyMatch = "RadialDimensionDescriptionFallback";
+                return true;
+            }
+
+            if (description.IndexOf("dimension is perpendicular to the current view", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                description.IndexOf("no longer valid", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                policyMatch = "DimensionPerpendicularToViewDescriptionFallback";
+                return true;
+            }
+
+            return false;
+        }
+
 
         public static bool ShouldDetachBrokenReference(FailureMessageAccessor failure, out string policyMatch)
         {

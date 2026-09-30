@@ -6,7 +6,7 @@
         xmlns:local="clr-namespace:ScheduledNwcExporter.UI.Views"
         xmlns:vm="clr-namespace:ScheduledNwcExporter.UI.ViewModels"
         mc:Ignorable="d"
-        Title="Hatco Cloud Explorer (ACC / BIM 360)" Height="600" Width="500"
+        Title="Hatco Cloud Explorer (ACC / BIM 360)" Height="640" Width="560"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         xmlns:ui="clr-namespace:ScheduledNwcExporter.UI">
     <Window.Resources>
@@ -18,35 +18,40 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <TextBlock Grid.Row="0" Text="Select a Revit model from Autodesk Construction Cloud:" FontWeight="Bold" Margin="0,0,0,10"/>
 
-        <Grid Grid.Row="1" Margin="0,0,0,8">
+        <Grid Grid.Row="1" Margin="0,0,0,6">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <TextBlock Text="Search:" VerticalAlignment="Center" Margin="0,0,8,0"/>
-            <TextBox Grid.Column="1" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Height="24" VerticalContentAlignment="Center"/>
+            <TextBox Grid.Column="1" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Height="25" VerticalContentAlignment="Center" Margin="0,0,10,0"/>
+            <CheckBox Grid.Column="2" Content="Revit files only" IsChecked="{Binding RevitFilesOnly}" VerticalAlignment="Center"/>
         </Grid>
 
-        <Border Grid.Row="2" Background="#FFF0F0F0" Padding="6,4" Margin="0,0,0,8" CornerRadius="2">
+        <TextBlock Grid.Row="2" Text="{Binding SearchStatus}" FontSize="10" Foreground="#FF64748B" Margin="0,0,0,6" TextWrapping="Wrap"/>
+
+        <Border Grid.Row="3" Background="#FFF0F0F0" Padding="6,4" Margin="0,0,0,8" CornerRadius="2">
             <TextBlock Text="{Binding Breadcrumbs}" FontSize="10" Foreground="#FF666666" TextWrapping="Wrap"/>
         </Border>
 
-        <TreeView Grid.Row="3" ItemsSource="{Binding Nodes}" Margin="0,0,0,10" SelectedItemChanged="TreeView_SelectedItemChanged">
+        <TreeView Grid.Row="4" ItemsSource="{Binding Nodes}" Margin="0,0,0,10" SelectedItemChanged="TreeView_SelectedItemChanged">
             <TreeView.ItemContainerStyle>
                 <Style TargetType="TreeViewItem">
                     <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+                    <Setter Property="Visibility" Value="{Binding IsVisible, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                 </Style>
             </TreeView.ItemContainerStyle>
             <TreeView.ItemTemplate>
                 <HierarchicalDataTemplate ItemsSource="{Binding Children}">
                     <StackPanel Orientation="Horizontal">
-                        <!-- Simple icon placeholder -->
                         <TextBlock Text="{Binding Type, Converter={StaticResource TypeToIconConverter}}" Margin="0,0,5,0"/>
                         <TextBlock Text="{Binding Name}"/>
                     </StackPanel>
@@ -54,12 +59,12 @@
             </TreeView.ItemTemplate>
         </TreeView>
 
-        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button Content="Select Model" Command="{Binding SelectCommand}" Width="100" Margin="0,0,10,0" IsDefault="True"/>
             <Button Content="Cancel" Command="{Binding CancelCommand}" Width="100" IsCancel="True"/>
         </StackPanel>
 
-        <Grid Grid.Row="3" Background="#80FFFFFF" Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
+        <Grid Grid.Row="4" Background="#80FFFFFF" Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                 <ProgressBar IsIndeterminate="True" Width="200" Height="20"/>
                 <TextBlock Text="Loading Cloud Data..." HorizontalAlignment="Center" Margin="0,5,0,0"/>

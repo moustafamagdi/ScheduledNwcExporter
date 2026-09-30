@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Autodesk.Revit.UI;
+using ScheduledNwcExporter.Operations;
 using ScheduledNwcExporter.Reliability;
 using ScheduledNwcExporter.UI.Views;
 
@@ -22,6 +23,7 @@ namespace ScheduledNwcExporter.Application
         internal static ExternalEvent? QueueEvent { get; private set; }
         private static bool _dialogHandlerSubscribed;
         private static bool _scheduledSelectionInProgress;
+        private static NotificationService? _notificationService;
 
         public Result OnStartup(UIControlledApplication application)
         {
@@ -102,16 +104,19 @@ namespace ScheduledNwcExporter.Application
                 Logger = new Logging.FileLogger();
 
             if (ConfigManager == null)
+            {
+                ConfigurationSchemaService.MigrateBeforeLoad(Logger);
                 ConfigManager = new Configuration.ConfigurationManager(Logger);
+            }
 
             Logger.DebugMode = ConfigManager.CurrentSettings.DebugMode;
-
-            // Older builds reused IsEnabled for the automatic freshness selection and persisted
-            // those transient choices. Run this once before the ViewModel calculates the new
-            // IsSelectedForRun state so legacy jobs do not appear incorrectly disabled/dimmed.
-            LegacyRunSelectionMigration.RunOnce(ConfigManager, Logger);
-
             NormalizeScheduleDays();
+
+            if (_notificationService == null)
+            {
+                try { _notificationService = new NotificationService(); }
+                catch (Exception ex) { Logger.Warning("Notifications", $"Windows notification service is unavailable: {ex.Message}"); }
+            }
 
             if (QueueHandler == null)
             {
@@ -120,6 +125,7 @@ namespace ScheduledNwcExporter.Application
                     ConfigManager.CurrentSettings,
                     System.Windows.Threading.Dispatcher.CurrentDispatcher,
                     ConfigManager);
+                QueueHandler.SessionCompleted += OnOperationalSessionCompleted;
             }
 
             if (QueueEvent == null)
@@ -162,6 +168,7 @@ namespace ScheduledNwcExporter.Application
             if (scheduleNormalized)
             {
                 ConfigManager.SaveConfiguration();
+                ConfigurationSchemaService.StampCurrentVersion(Logger);
                 Logger.Info("Scheduler", "Normalized duplicate schedule-day entries in configuration.");
             }
         }
@@ -170,8 +177,6 @@ namespace ScheduledNwcExporter.Application
         {
             if (ConfigManager == null || QueueHandler == null || Logger == null) return;
 
-            // When the manager is visible, its ViewModel owns the scheduled callback so the UI can
-            // stay synchronized. The app-level path handles schedules while the window is closed.
             if (ExportManagerWindow != null && ExportManagerWindow.IsVisible)
                 return;
 
@@ -201,7 +206,11 @@ namespace ScheduledNwcExporter.Application
                 if (activeJobs.Count > 0)
                 {
                     Logger.Info("Scheduler", $"Starting unattended scheduled export of {activeJobs.Count} stale/unverified model(s).");
-                    QueueHandler.Start(activeJobs, Revit.ExternalEvents.SessionTriggerSource.Scheduler);
+                    if (!QueueHandler.Start(activeJobs, Revit.ExternalEvents.SessionTriggerSource.Scheduler))
+                    {
+                        Logger.Error("Scheduler", $"Scheduled export could not start: {QueueHandler.LastStartIssue}", string.Empty, "OperationalPreflight");
+                        _notificationService?.NotifyPreflightBlocked(QueueHandler.LastStartIssue);
+                    }
                 }
                 else
                 {
@@ -234,6 +243,7 @@ namespace ScheduledNwcExporter.Application
                     job.SourceMetadataError = "No Autodesk session is available to verify the current ACC version before the scheduled run.";
 
                 ConfigManager.SaveConfiguration();
+                ConfigurationSchemaService.StampCurrentVersion(Logger);
                 Logger.Warning("Scheduler", "ACC metadata refresh could not run because no Autodesk session token was available. Cloud jobs remain conservatively unverified.", string.Empty, "FreshnessSelection");
                 return;
             }
@@ -265,6 +275,22 @@ namespace ScheduledNwcExporter.Application
             }
 
             ConfigManager.SaveConfiguration();
+            ConfigurationSchemaService.StampCurrentVersion(Logger);
+        }
+
+        private static void OnOperationalSessionCompleted(object sender, Revit.ExternalEvents.ExportSessionSummary summary)
+        {
+            try
+            {
+                _notificationService?.NotifySessionCompleted(summary);
+            }
+            catch (Exception ex)
+            {
+                Logger?.Warning("Notifications", $"Could not show export completion notification: {ex.Message}");
+            }
+
+            if (Logger != null)
+                ConfigurationSchemaService.StampCurrentVersion(Logger);
         }
 
         public Result OnShutdown(UIControlledApplication application)
@@ -281,6 +307,9 @@ namespace ScheduledNwcExporter.Application
                 Scheduler.Stop();
             }
 
+            if (QueueHandler != null)
+                QueueHandler.SessionCompleted -= OnOperationalSessionCompleted;
+
             Core.AssemblyLoader.Unregister();
 
             if (ExportManagerWindow != null)
@@ -288,6 +317,9 @@ namespace ScheduledNwcExporter.Application
                 ExportManagerWindow.Close();
                 ExportManagerWindow = null;
             }
+
+            _notificationService?.Dispose();
+            _notificationService = null;
 
             QueueEvent?.Dispose();
             QueueEvent = null;

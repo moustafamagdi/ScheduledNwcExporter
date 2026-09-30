@@ -706,8 +706,14 @@ namespace ScheduledNwcExporter.UI.ViewModels
                     if (!string.IsNullOrWhiteSpace(summary.SessionError))
                         message += $"\n\nSession Error:\n{summary.SessionError}";
 
-                    MessageBox.Show(message, "Scheduled NWC Export Manager", MessageBoxButton.OK,
-                        summary.Failed > 0 || !string.IsNullOrWhiteSpace(summary.SessionError) ? MessageBoxImage.Warning : MessageBoxImage.Information);
+                    bool hasWarning = summary.Failed > 0 || !string.IsNullOrWhiteSpace(summary.SessionError);
+                    var completionWindow = new Views.SessionCompletedWindow(message, hasWarning);
+                    Window? owner = ScheduledNwcExporter.Application.App.ExportManagerWindow;
+                    if (owner != null && !owner.IsVisible)
+                        owner = null;
+                    if (owner != null)
+                        completionWindow.Owner = owner;
+                    completionWindow.ShowDialog();
                 }), DispatcherPriority.Background);
             }
             else

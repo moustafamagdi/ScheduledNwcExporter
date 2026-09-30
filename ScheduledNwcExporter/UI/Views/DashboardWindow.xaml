@@ -1,0 +1,66 @@
+<Window x:Class="ScheduledNwcExporter.UI.Views.DashboardWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Hatco NWC Exporter Dashboard" Height="470" Width="780"
+        WindowStartupLocation="CenterOwner" Background="#FFF5F5F5">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="0,0,0,14">
+            <TextBlock Text="NWC Export Operations Dashboard" FontSize="19" FontWeight="Bold"/>
+            <TextBlock Text="Current queue readiness and recent batch performance." Foreground="#FF64748B" Margin="0,3,0,0"/>
+        </StackPanel>
+
+        <UniformGrid Grid.Row="1" Columns="5" Margin="0,0,0,12">
+            <Border Background="White" BorderBrush="#FFE2E8F0" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,8,0">
+                <StackPanel><TextBlock Text="CURRENT" FontSize="10" Foreground="#FF64748B"/><TextBlock x:Name="CurrentCountText" FontSize="26" FontWeight="Bold"/></StackPanel>
+            </Border>
+            <Border Background="White" BorderBrush="#FFE2E8F0" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,8,0">
+                <StackPanel><TextBlock Text="NEEDS EXPORT" FontSize="10" Foreground="#FF64748B"/><TextBlock x:Name="NeedsExportCountText" FontSize="26" FontWeight="Bold"/></StackPanel>
+            </Border>
+            <Border Background="White" BorderBrush="#FFE2E8F0" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,8,0">
+                <StackPanel><TextBlock Text="FAILED" FontSize="10" Foreground="#FF64748B"/><TextBlock x:Name="FailedCountText" FontSize="26" FontWeight="Bold"/></StackPanel>
+            </Border>
+            <Border Background="White" BorderBrush="#FFE2E8F0" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,8,0">
+                <StackPanel><TextBlock Text="ENABLED" FontSize="10" Foreground="#FF64748B"/><TextBlock x:Name="EnabledCountText" FontSize="26" FontWeight="Bold"/></StackPanel>
+            </Border>
+            <Border Background="White" BorderBrush="#FFE2E8F0" BorderThickness="1" CornerRadius="6" Padding="12">
+                <StackPanel><TextBlock Text="AVG MODEL TIME" FontSize="10" Foreground="#FF64748B"/><TextBlock x:Name="AverageTimeText" FontSize="20" FontWeight="Bold"/></StackPanel>
+            </Border>
+        </UniformGrid>
+
+        <Grid Grid.Row="2" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Border Grid.Column="0" Background="White" BorderBrush="#FFE2E8F0" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,6,0">
+                <StackPanel>
+                    <TextBlock Text="Last Batch" FontWeight="Bold" Margin="0,0,0,5"/>
+                    <TextBlock x:Name="LastBatchText" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="1" Background="White" BorderBrush="#FFE2E8F0" BorderThickness="1" CornerRadius="6" Padding="12" Margin="6,0,0,0">
+                <StackPanel>
+                    <TextBlock Text="Last Scheduled Batch" FontWeight="Bold" Margin="0,0,0,5"/>
+                    <TextBlock x:Name="LastScheduledText" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="3" Background="White" BorderBrush="#FFE2E8F0" BorderThickness="1" CornerRadius="6" Padding="12">
+            <StackPanel>
+                <TextBlock Text="Recent Activity" FontWeight="Bold" Margin="0,0,0,6"/>
+                <TextBlock x:Name="RecentActivityText" TextWrapping="Wrap" Foreground="#FF334155"/>
+            </StackPanel>
+        </Border>
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button Content="Refresh" Click="Refresh_Click" Width="80" Height="30" Margin="0,0,8,0"/>
+            <Button Content="Close" Click="Close_Click" Width="80" Height="30"/>
+        </StackPanel>
+    </Grid>
+</Window>

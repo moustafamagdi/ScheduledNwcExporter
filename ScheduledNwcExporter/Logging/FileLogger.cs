@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace ScheduledNwcExporter.Logging
 {
@@ -22,15 +24,18 @@ namespace ScheduledNwcExporter.Logging
         public string Stage { get; set; } = string.Empty;
         public string Message { get; set; } = string.Empty;
         public Exception? Exception { get; set; }
-        public TimeSpan Duration { get; set; }
+        public string SessionId { get; set; } = string.Empty;
+        public string JobId { get; set; } = string.Empty;
 
         public override string ToString()
         {
             string timeStr = Timestamp.ToString("HH:mm:ss.fff");
+            string sessionInfo = string.IsNullOrEmpty(SessionId) ? "" : $" [Session: {SessionId}]";
+            string jobInfo = string.IsNullOrEmpty(JobId) ? "" : $" [Job: {JobId}]";
             string modelInfo = string.IsNullOrEmpty(ModelName) ? "" : $" [Model: {ModelName}]";
             string stageInfo = string.IsNullOrEmpty(Stage) ? "" : $" [Stage: {Stage}]";
             string exInfo = Exception != null ? $" | Exception: {Exception.GetType().Name}: {Exception.Message}" : "";
-            return $"[{timeStr}] [{Level,-7}] [{Category}]{modelInfo}{stageInfo} {Message}{exInfo}";
+            return $"[{timeStr}] [{Level,-7}] [{Category}]{sessionInfo}{jobInfo}{modelInfo}{stageInfo} {Message}{exInfo}";
         }
     }
 
@@ -43,30 +48,83 @@ namespace ScheduledNwcExporter.Logging
         void Warning(string category, string message, string modelName = "", string stage = "", Exception? ex = null);
         void Error(string category, string message, string modelName = "", string stage = "", Exception? ex = null);
         void Fatal(string category, string message, string modelName = "", string stage = "", Exception? ex = null);
+        void SetSessionContext(string sessionId);
+        void ClearSessionContext();
+        void SetJobContext(string jobId);
+        void ClearJobContext();
         string LogFilePath { get; }
+        string LogDirectory { get; }
+        string CurrentSessionId { get; }
+        string CurrentJobId { get; }
         bool DebugMode { get; set; }
     }
 
     public class FileLogger : ILogger
     {
-        private readonly string _logDirectory;
+        private const int RetentionDays = 30;
+        private const int MaximumLogFiles = 100;
+        private const long MaximumTotalLogBytes = 100L * 1024L * 1024L;
+
         private readonly object _lock = new object();
+        private string _currentSessionId = string.Empty;
+        private string _currentJobId = string.Empty;
+
         public string LogFilePath { get; }
+        public string LogDirectory { get; }
+        public string CurrentSessionId { get { lock (_lock) return _currentSessionId; } }
+        public string CurrentJobId { get { lock (_lock) return _currentJobId; } }
         public bool DebugMode { get; set; } = false;
 
         public FileLogger()
         {
             string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            _logDirectory = Path.Combine(appData, "MoustafaMagdi", "ScheduledNwcExporter", "logs");
-            Directory.CreateDirectory(_logDirectory);
+            LogDirectory = Path.Combine(appData, "MoustafaMagdi", "ScheduledNwcExporter", "logs");
+            Directory.CreateDirectory(LogDirectory);
+            CleanupOldLogs();
             string fileName = $"{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log";
-            LogFilePath = Path.Combine(_logDirectory, fileName);
+            LogFilePath = Path.Combine(LogDirectory, fileName);
             Info("Logging", $"Log session initialized at {LogFilePath}");
+        }
+
+        public void SetSessionContext(string sessionId)
+        {
+            lock (_lock)
+            {
+                _currentSessionId = sessionId ?? string.Empty;
+                _currentJobId = string.Empty;
+            }
+        }
+
+        public void ClearSessionContext()
+        {
+            lock (_lock)
+            {
+                _currentSessionId = string.Empty;
+                _currentJobId = string.Empty;
+            }
+        }
+
+        public void SetJobContext(string jobId)
+        {
+            lock (_lock) _currentJobId = jobId ?? string.Empty;
+        }
+
+        public void ClearJobContext()
+        {
+            lock (_lock) _currentJobId = string.Empty;
         }
 
         public void Log(LogLevel level, string category, string message, string modelName = "", string stage = "", Exception? ex = null)
         {
             if (level == LogLevel.DEBUG && !DebugMode) return;
+
+            string sessionId;
+            string jobId;
+            lock (_lock)
+            {
+                sessionId = _currentSessionId;
+                jobId = _currentJobId;
+            }
 
             var entry = new LogEntry
             {
@@ -76,7 +134,9 @@ namespace ScheduledNwcExporter.Logging
                 ModelName = modelName,
                 Stage = stage,
                 Message = message,
-                Exception = ex
+                Exception = ex,
+                SessionId = sessionId,
+                JobId = jobId
             };
 
             string line = entry.ToString();
@@ -88,8 +148,62 @@ namespace ScheduledNwcExporter.Logging
                 }
                 catch
                 {
-                    // Fallback to console if file write fails
+                    // Logging must never stop the Revit automation workflow.
                 }
+            }
+        }
+
+        private void CleanupOldLogs()
+        {
+            try
+            {
+                var files = new DirectoryInfo(LogDirectory)
+                    .GetFiles("*.log")
+                    .OrderByDescending(file => file.LastWriteTimeUtc)
+                    .ToList();
+
+                DateTime cutoff = DateTime.UtcNow.AddDays(-RetentionDays);
+                foreach (FileInfo file in files.Where(file => file.LastWriteTimeUtc < cutoff).ToList())
+                {
+                    TryDelete(file);
+                    files.Remove(file);
+                }
+
+                foreach (FileInfo file in files.Skip(MaximumLogFiles).ToList())
+                {
+                    TryDelete(file);
+                    files.Remove(file);
+                }
+
+                long totalBytes = files.Sum(file => SafeLength(file));
+                foreach (FileInfo file in files.OrderBy(file => file.LastWriteTimeUtc).ToList())
+                {
+                    if (totalBytes <= MaximumTotalLogBytes) break;
+                    long length = SafeLength(file);
+                    if (TryDelete(file)) totalBytes -= length;
+                }
+            }
+            catch
+            {
+                // Retention cleanup is best-effort only.
+            }
+        }
+
+        private static long SafeLength(FileInfo file)
+        {
+            try { return file.Length; } catch { return 0; }
+        }
+
+        private static bool TryDelete(FileInfo file)
+        {
+            try
+            {
+                file.Delete();
+                return true;
+            }
+            catch
+            {
+                return false;
             }
         }
 

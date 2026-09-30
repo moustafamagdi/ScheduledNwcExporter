@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Windows;
@@ -12,6 +15,7 @@ using Autodesk.Revit.UI;
 using ScheduledNwcExporter.Application;
 using ScheduledNwcExporter.Configuration;
 using ScheduledNwcExporter.Logging;
+using ScheduledNwcExporter.Operations;
 using ScheduledNwcExporter.Revit.ExternalEvents;
 using ScheduledNwcExporter.UI.ViewModels;
 
@@ -43,8 +47,11 @@ namespace ScheduledNwcExporter.UI.Views
                 _viewModel = new MainViewModel(App.ConfigManager ?? new ConfigurationManager(_logger), _logger, _exportQueueHandler, App.Scheduler);
                 DataContext = _viewModel;
                 Closed += MainWindow_Closed;
+                PreviewKeyDown += MainWindow_PreviewKeyDown;
 
                 RegisterSafeEventHandlers();
+                RegisterRunSelectionTracking();
+                UpdateRunSelectionUi();
             }
             catch (Exception ex)
             {
@@ -56,6 +63,107 @@ namespace ScheduledNwcExporter.UI.Views
             }
         }
 
+        private void RegisterRunSelectionTracking()
+        {
+            _viewModel.Jobs.CollectionChanged += Jobs_CollectionChanged;
+            foreach (ModelExportJob job in _viewModel.Jobs)
+                job.PropertyChanged += RunSelectionJob_PropertyChanged;
+        }
+
+        private void Jobs_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.OldItems != null)
+            {
+                foreach (ModelExportJob job in e.OldItems.OfType<ModelExportJob>())
+                    job.PropertyChanged -= RunSelectionJob_PropertyChanged;
+            }
+            if (e.NewItems != null)
+            {
+                foreach (ModelExportJob job in e.NewItems.OfType<ModelExportJob>())
+                    job.PropertyChanged += RunSelectionJob_PropertyChanged;
+            }
+            UpdateRunSelectionUi();
+        }
+
+        private void RunSelectionJob_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(ModelExportJob.IsSelectedForRun) || e.PropertyName == nameof(ModelExportJob.IsEnabled))
+                Dispatcher.BeginInvoke(new Action(UpdateRunSelectionUi));
+        }
+
+        private void UpdateRunSelectionUi()
+        {
+            if (RunSelectionText == null || RunNowButton == null) return;
+            int enabled = _viewModel.Jobs.Count(job => job.IsEnabled);
+            int selected = _viewModel.Jobs.Count(job => job.IsEnabled && job.IsSelectedForRun);
+            RunSelectionText.Text = $"{selected}/{enabled} selected";
+            RunNowButton.Content = selected > 0 ? $" Run Now ({selected}) " : " Run Now ";
+        }
+
+        private void SelectAllRun_Click(object sender, RoutedEventArgs e)
+        {
+            foreach (ModelExportJob job in _viewModel.Jobs.Where(job => job.IsEnabled))
+                job.IsSelectedForRun = true;
+            UpdateRunSelectionUi();
+        }
+
+        private void ClearRunSelection_Click(object sender, RoutedEventArgs e)
+        {
+            foreach (ModelExportJob job in _viewModel.Jobs)
+                job.IsSelectedForRun = false;
+            UpdateRunSelectionUi();
+        }
+
+        private void Dashboard_Click(object sender, RoutedEventArgs e)
+        {
+            var window = new DashboardWindow { Owner = this };
+            window.ShowDialog();
+        }
+
+        private void SessionHistory_Click(object sender, RoutedEventArgs e)
+        {
+            var window = new SessionHistoryWindow { Owner = this };
+            window.ShowDialog();
+        }
+
+        private void OpenLastReport_Click(object sender, RoutedEventArgs e)
+        {
+            SessionHistoryRecord? latest = SessionHistoryService.GetLatest();
+            if (latest == null || string.IsNullOrWhiteSpace(latest.ReportPath) || !File.Exists(latest.ReportPath))
+            {
+                MessageBox.Show("No generated export report is available yet.", "Hatco NWC Exporter", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            try
+            {
+                Process.Start(new ProcessStartInfo(latest.ReportPath) { UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not open the report:\n{ex.Message}", "Hatco NWC Exporter", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void MainWindow_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (e.Key != System.Windows.Input.Key.Escape)
+                return;
+
+            // Escape is intentionally ignored while an operation is active. It must never
+            // cancel a queue, close the manager mid-export, or interrupt a metadata refresh.
+            if (_exportQueueHandler.IsSessionRunning || _viewModel.IsRefreshingModelDates)
+            {
+                e.Handled = true;
+                _logger?.Debug("UI", "Escape ignored because an operation is currently running.", string.Empty, "SafeClose");
+                return;
+            }
+
+            e.Handled = true;
+            _logger?.Info("UI", "Manager closed with Escape while idle.", string.Empty, "SafeClose");
+            Close();
+        }
+
         private void Dispatcher_UnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
         {
             _logger?.Error("UI", $"Unhandled exception caught: {e.Exception.Message}", string.Empty, "Dispatcher", e.Exception);
@@ -65,8 +173,6 @@ namespace ScheduledNwcExporter.UI.Views
 
         private void RegisterSafeEventHandlers()
         {
-            // Single-click and bulk toggling operate on the transient run selection only.
-            // Persistent job eligibility (IsEnabled) is never changed implicitly by queue selection.
             QueueDataGrid.PreviewMouseLeftButtonDown += (s, e) =>
             {
                 try
@@ -182,6 +288,10 @@ namespace ScheduledNwcExporter.UI.Views
             try
             {
                 Dispatcher.UnhandledException -= Dispatcher_UnhandledException;
+                PreviewKeyDown -= MainWindow_PreviewKeyDown;
+                _viewModel.Jobs.CollectionChanged -= Jobs_CollectionChanged;
+                foreach (ModelExportJob job in _viewModel.Jobs)
+                    job.PropertyChanged -= RunSelectionJob_PropertyChanged;
                 _viewModel?.Shutdown();
             }
             catch { }
