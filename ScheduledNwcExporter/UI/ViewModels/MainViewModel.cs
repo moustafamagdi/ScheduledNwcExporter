@@ -708,9 +708,9 @@ namespace ScheduledNwcExporter.UI.ViewModels
 
                     bool hasWarning = summary.Failed > 0 || !string.IsNullOrWhiteSpace(summary.SessionError);
                     var completionWindow = new Views.SessionCompletedWindow(message, hasWarning);
-                    Window? owner = Application.Current?.Windows
-                        .OfType<Window>()
-                        .FirstOrDefault(window => window is Views.MainWindow && window.IsVisible);
+                    Window? owner = ScheduledNwcExporter.Application.App.ExportManagerWindow;
+                    if (owner != null && !owner.IsVisible)
+                        owner = null;
                     if (owner != null)
                         completionWindow.Owner = owner;
                     completionWindow.ShowDialog();
